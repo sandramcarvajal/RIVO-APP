@@ -1,0 +1,6 @@
+{
+  "name": "Rivo",
+  "description": "Mobilidad corporativa, segura y eficiente para empleados.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,19 @@
+<svg width="200" height="80" viewBox="0 0 200 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- R Icon with Gradient -->
+  <defs>
+    <linearGradient id="gradientR" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4f46e5"/>
+      <stop offset="1" stop-color="#10b981"/>
+    </linearGradient>
+  </defs>
+  
+  <rect x="10" y="10" width="40" height="40" rx="12" fill="url(#gradientR)" />
+  <path d="M22 35C22 35 25 25 30 25C35 25 38 35 38 35" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="30" cy="22" r="4" fill="white" />
+  
+  <!-- Text Rivo -->
+  <text x="60" y="45" font-family="Outfit, sans-serif" font-weight="800" font-size="32" fill="#0f172a">Rivo</text>
+  
+  <!-- Slogan -->
+  <text x="12" y="65" font-family="Inter, sans-serif" font-weight="500" font-size="10" fill="#64748b">Comparte tu ruta, a tu ritmo</text>
+</svg>
