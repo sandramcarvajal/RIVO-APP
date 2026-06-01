@@ -24,7 +24,7 @@ const AdminView = () => {
         {stats.map((stat, i) => (
           <div key={i} className="card-rivo border-none bg-white p-5 shadow-sm">
             <stat.icon size={24} className={stat.color + " mb-3"} />
-            <p className="text-[10px] uppercase tracking-widest font-black text-slate-400">{stat.label}</p>
+            <p className="text-[12px] uppercase tracking-widest font-black text-slate-400">{stat.label}</p>
             <p className="text-2xl font-black text-slate-800">{stat.value}</p>
           </div>
         ))}
@@ -42,10 +42,10 @@ const AdminView = () => {
           <table className="w-full text-left">
             <thead className="bg-slate-50 border-b border-slate-100">
               <tr>
-                <th className="px-6 py-4 text-[10px] font-black tracking-widest text-slate-400 uppercase">Conductor</th>
-                <th className="px-6 py-4 text-[10px] font-black tracking-widest text-slate-400 uppercase">Ruta</th>
-                <th className="px-6 py-4 text-[10px] font-black tracking-widest text-slate-400 uppercase">Estado</th>
-                <th className="px-6 py-4 text-[10px] font-black tracking-widest text-slate-400 uppercase">Acción</th>
+                <th className="px-6 py-4 text-[12px] font-black tracking-widest text-slate-400 uppercase">Conductor</th>
+                <th className="px-6 py-4 text-[12px] font-black tracking-widest text-slate-400 uppercase">Ruta</th>
+                <th className="px-6 py-4 text-[12px] font-black tracking-widest text-slate-400 uppercase">Estado</th>
+                <th className="px-6 py-4 text-[12px] font-black tracking-widest text-slate-400 uppercase">Acción</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -56,7 +56,7 @@ const AdminView = () => {
                     {route.origin} → {route.destination}
                   </td>
                   <td className="px-6 py-4">
-                    <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-600 text-[10px] font-bold">ACTIVA</span>
+                    <span className="px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-600 text-[11.5px] font-black uppercase tracking-wider">ACTIVA</span>
                   </td>
                   <td className="px-6 py-4">
                      <button className="text-primary font-bold text-xs hover:underline">Ver detalles</button>

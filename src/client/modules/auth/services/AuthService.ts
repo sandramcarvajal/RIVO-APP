@@ -90,7 +90,7 @@ export class AuthService {
 
   static async updateProfile(data: any): Promise<any> {
     const response = await SecureHttpClient.request("/api/auth/me", {
-      method: "PATCH",
+      method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });

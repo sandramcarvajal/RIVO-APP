@@ -46,6 +46,18 @@ notificationRouter.patch("/:id/read", authMiddleware, async (req: AuthRequest, r
   }
 });
 
+notificationRouter.post("/:id/read", authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.user!.userId;
+    const { id } = req.params;
+    await notificationRepository.markAsRead(id, userId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error(`[NotificationRouter] Error marking notification as read (POST):`, error);
+    res.status(500).json({ error: "Error marking notification as read" });
+  }
+});
+
 // Mark all as read
 notificationRouter.patch("/read-all", authMiddleware, async (req: AuthRequest, res) => {
   try {
@@ -54,6 +66,17 @@ notificationRouter.patch("/read-all", authMiddleware, async (req: AuthRequest, r
     res.json({ success: true });
   } catch (error) {
     console.error(`[NotificationRouter] Error marking all notifications as read:`, error);
+    res.status(500).json({ error: "Error marking all notifications as read" });
+  }
+});
+
+notificationRouter.post("/read-all", authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.user!.userId;
+    await notificationRepository.markAllAsRead(userId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error(`[NotificationRouter] Error marking all notifications as read (POST):`, error);
     res.status(500).json({ error: "Error marking all notifications as read" });
   }
 });

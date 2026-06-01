@@ -2,10 +2,12 @@ import { eq, and, like, or, sql } from "drizzle-orm";
 import { db } from "../../../../db";
 import { routes, users } from "../../../../db/schema";
 import { IRouteRepository, RouteEntity, RouteStatus } from "../domain/IRouteRepository";
+import { RouteLifecycleManager } from "./RouteLifecycleManager";
 
 export class DrizzleRouteRepository implements IRouteRepository {
   async findById(id: string): Promise<RouteEntity | null> {
     try {
+      await RouteLifecycleManager.performJitTransitions();
       console.log(`[DrizzleRouteRepository] Finding route by id: ${id}`);
       const [result] = await db
         .select({
@@ -28,8 +30,9 @@ export class DrizzleRouteRepository implements IRouteRepository {
     }
   }
 
-  async findAll(filters?: { status?: RouteStatus | string; driverId?: string }): Promise<RouteEntity[]> {
+  async findAll(filters?: { status?: RouteStatus | string; driverId?: string; futureOnly?: boolean }): Promise<RouteEntity[]> {
     try {
+      await RouteLifecycleManager.performJitTransitions();
       console.log(`[DrizzleRouteRepository] Finding routes with filters:`, filters);
       const conditions = [];
       
@@ -44,6 +47,10 @@ export class DrizzleRouteRepository implements IRouteRepository {
       }
       
       if (filters?.driverId) conditions.push(eq(routes.driverId, parseInt(filters.driverId)));
+
+      if (filters?.futureOnly) {
+        conditions.push(sql`${routes.departureTime} > ${new Date()}`);
+      }
 
       const results = await db
         .select({
@@ -68,6 +75,7 @@ export class DrizzleRouteRepository implements IRouteRepository {
       console.log(`[DrizzleRouteRepository] Creating route for driver: ${route.driverId}`);
       const [created] = await db.insert(routes).values({
         driverId: parseInt(route.driverId),
+        vehicleId: route.vehicleId ? parseInt(route.vehicleId) : null,
         origin: route.origin,
         originCoords: route.originCoords,
         destination: route.destination,
@@ -91,14 +99,15 @@ export class DrizzleRouteRepository implements IRouteRepository {
 
   async update(id: string, data: Partial<RouteEntity>): Promise<RouteEntity> {
     try {
-      console.log(`[DrizzleRouteRepository] Updating route ${id}`);
+      console.log(`[DrizzleRouteRepository] Updating route ${id} with data:`, data);
+      const updateData: any = {};
+      if (data.origin !== undefined) updateData.origin = data.origin;
+      if (data.destination !== undefined) updateData.destination = data.destination;
+      if (data.status !== undefined) updateData.status = data.status;
+      if (data.availableSeats !== undefined) updateData.availableSeats = data.availableSeats;
+
       const [updated] = await db.update(routes)
-        .set({
-          origin: data.origin,
-          destination: data.destination,
-          status: data.status,
-          availableSeats: data.availableSeats,
-        })
+        .set(updateData)
         .where(eq(routes.id, parseInt(id)))
         .returning();
 
@@ -124,10 +133,7 @@ export class DrizzleRouteRepository implements IRouteRepository {
         .leftJoin(users, eq(routes.driverId, users.id))
         .where(
           and(
-            or(
-              sql`LOWER(${routes.status}) = ${RouteStatus.SCHEDULED}`,
-              sql`LOWER(${routes.status}) = ${RouteStatus.ACTIVE}`
-            ),
+            eq(routes.status, RouteStatus.SCHEDULED),
             or(
               like(routes.origin, `%${origin}%`),
               like(routes.destination, `%${destination}%`)
@@ -161,6 +167,7 @@ export class DrizzleRouteRepository implements IRouteRepository {
     return {
       id: data.id.toString(),
       driverId: data.driverId.toString(),
+      vehicleId: data.vehicleId?.toString() || undefined,
       driverName,
       driverAvatar,
       origin: data.origin,

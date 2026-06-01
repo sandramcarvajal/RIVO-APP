@@ -11,6 +11,7 @@ const NotificationsView = () => {
   const { user, notifications, markNotificationAsRead, markAllNotificationsAsRead } = useAppStore();
 
   const userNotifications = notifications;
+  console.log(`[NOTIFICATION_RENDER] Rendering ${userNotifications.length} notifications:`, userNotifications.map(n => ({ id: n.id, title: n.title, isRead: n.isRead })));
 
   const getIcon = (type: NotificationType) => {
     switch (type) {
@@ -46,7 +47,7 @@ const NotificationsView = () => {
         {userNotifications.some(n => !n.isRead) && (
           <button 
             onClick={() => markAllNotificationsAsRead?.()} 
-            className="text-xs font-bold text-primary hover:underline"
+            className="text-sm font-bold text-primary hover:underline"
           >
             Marcar todas como leídas
           </button>
@@ -86,11 +87,11 @@ const NotificationsView = () => {
                   <h4 className={cn("text-sm font-bold", !notif.isRead ? "text-slate-900" : "text-slate-600")}>
                     {notif.title}
                   </h4>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  <span className="text-xs sm:text-[13px] font-bold text-slate-400 uppercase tracking-widest">
                     {formatDate(notif.createdAt)}
                   </span>
                 </div>
-                <p className="text-xs text-slate-500 leading-relaxed pr-6">
+                <p className="text-sm text-slate-500 leading-relaxed pr-6">
                   {notif.description}
                 </p>
               </div>

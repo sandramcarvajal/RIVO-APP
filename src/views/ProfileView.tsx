@@ -26,7 +26,8 @@ import {
   Briefcase,
   Home,
   CheckCircle2,
-  Route as RouteIcon
+  Route as RouteIcon,
+  User as UserIcon
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '../hooks/useAppStore';
@@ -38,6 +39,7 @@ import Modal from '../components/ui/Modal';
 import { cn } from '../lib/utils';
 import { User, Route, JoinRequest } from '../types';
 import { UserRole, RouteStatus, JoinRequestStatus } from '../shared/enums';
+import MyGarage from '../components/MyGarage';
 
 // --- Driver Profile Component ---
 interface DriverProfileProps {
@@ -70,29 +72,14 @@ const DriverProfile = ({ user, setIsEditing, isEditing }: DriverProfileProps) =>
   };
 
   const myTotalPasajeros = requests.filter(req => {
-    const route = routes.find(r => r.id === req.routeId);
-    return route?.driverId === user?.id && req.status.toLowerCase() === JoinRequestStatus.ACCEPTED;
+    const route = routes.find(r => String(r.id) === String(req.routeId));
+    return String(route?.driverId) === String(user?.id) && String(req.status).toLowerCase() === String(JoinRequestStatus.ACCEPTED).toLowerCase();
    }).length;
 
-  if (myRoutes.length === 0 && !isEditing) {
-    return (
-      <div className="px-2 py-10">
-        <EmptyState 
-           icon={RouteIcon}
-           title="No tienes rutas creadas"
-           description="Publica tu primera ruta para empezar a llevar compañeros hoy mismo."
-           action={() => navigate('/create-route')}
-           actionLabel="Publicar Mi Primera Ruta"
-        />
-      </div>
-    );
-  }
-
   const driverStats = [
-    { icon: Car, label: 'Viajes', value: myRoutes.length.toString(), color: 'text-blue-500' },
-    { icon: Users, label: 'Pasajeros', value: myTotalPasajeros.toString(), color: 'text-emerald-500' },
-    { icon: TrendingUp, label: 'Estatus', value: 'Silver', color: 'text-indigo-500' },
-    { icon: Star, label: 'Rating', value: user.rating?.toString() || '—', color: 'text-amber-500' },
+    { label: 'Viajes creados', value: myRoutes.length.toString(), icon: Car, color: 'text-indigo-500' },
+    { label: 'Pasajeros confirmados', value: myTotalPasajeros.toString(), icon: Users, color: 'text-emerald-500' },
+    { label: 'Rating promedio', value: (!user?.reviewCount || user.reviewCount === 0 || !user?.rating) ? 'Nuevo' : parseFloat(user.rating.toString()).toFixed(1), icon: Star, color: 'text-amber-500' },
   ];
 
   return (
@@ -136,65 +123,10 @@ const DriverProfile = ({ user, setIsEditing, isEditing }: DriverProfileProps) =>
         </div>
       </section>
 
-      {/* Vehicle Info */}
-      {user?.vehicle && (
-        <section className="px-2 space-y-4">
-          <div className="flex items-center justify-between px-1">
-             <h2 className="text-lg font-bold text-slate-800">Mi vehículo</h2>
-             <button 
-               onClick={() => setIsEditingVehicle(!isEditingVehicle)}
-               className="text-xs font-bold text-primary"
-             >
-               {isEditingVehicle ? 'Cerrar' : 'Editar vehículo'}
-             </button>
-          </div>
-
-          <div className="card-rivo group relative overflow-hidden bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-slate-900/5 via-transparent to-transparent">
-             <div className="flex items-center gap-5">
-                <div className="w-16 h-16 bg-primary/5 rounded-3xl flex items-center justify-center text-primary">
-                  <Car size={32} />
-                </div>
-                <div className="flex-1 space-y-1">
-                   <div className="flex items-center justify-between">
-                      <p className="font-bold text-slate-900">{user.vehicle.brand}</p>
-                      <span className="px-2 py-0.5 bg-slate-900 text-white rounded-lg font-mono text-sm tracking-widest">{user.vehicle.plate}</span>
-                   </div>
-                   <p className="text-xs text-slate-500">{user.vehicle.color} • 3 cupos disponibles</p>
-                </div>
-             </div>
-             
-             <AnimatePresence>
-              {isEditingVehicle && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="mt-6 pt-6 border-t border-slate-100 space-y-4"
-                >
-                   <div className="grid grid-cols-2 gap-4">
-                      <Input 
-                        label="Placa"
-                        value={editVehicle.plate}
-                        onChange={(e) => setEditVehicle({...editVehicle, plate: e.target.value})}
-                      />
-                      <Input 
-                        label="Marca"
-                        value={editVehicle.brand}
-                        onChange={(e) => setEditVehicle({...editVehicle, brand: e.target.value})}
-                      />
-                   </div>
-                   <Input 
-                      label="Color"
-                      value={editVehicle.color}
-                      onChange={(e) => setEditVehicle({...editVehicle, color: e.target.value})}
-                    />
-                   <Button size="sm" onClick={handleSaveVehicle} className="w-full">Actualizar vehículo</Button>
-                </motion.div>
-              )}
-             </AnimatePresence>
-          </div>
-        </section>
-      )}
+      {/* Rivo Garage - Multi-vehicle & official documents administrator */}
+      <section className="px-2">
+        <MyGarage />
+      </section>
 
       {/* Driver Stats */}
       <section className="px-2 space-y-4">
@@ -202,12 +134,14 @@ const DriverProfile = ({ user, setIsEditing, isEditing }: DriverProfileProps) =>
           <TrendingUp size={20} className="text-slate-400" />
           <h2 className="text-lg font-bold text-slate-800">Mi reputación como conductor</h2>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-3 md:gap-4">
           {driverStats.map((stat, i) => (
-            <div key={i} className="card-rivo p-5 border-none bg-indigo-50/30">
-              <stat.icon size={18} className={cn("mb-2", stat.color)} />
-              <p className="text-[10px] uppercase font-black text-slate-400 tracking-widest">{stat.label}</p>
-              <p className="text-xl font-black text-slate-800">{stat.value}</p>
+            <div key={i} className="card-rivo p-4 sm:p-5 border-none bg-slate-50/50 flex flex-col justify-between">
+              <div>
+                <stat.icon size={18} className={cn("mb-2 sm:mb-2.5", stat.color)} />
+                <p className="text-[10px] sm:text-xs uppercase font-black text-slate-400 tracking-wider leading-tight">{stat.label}</p>
+              </div>
+              <p className="text-xl sm:text-2xl font-black text-slate-800 mt-2">{stat.value}</p>
             </div>
           ))}
         </div>
@@ -217,7 +151,7 @@ const DriverProfile = ({ user, setIsEditing, isEditing }: DriverProfileProps) =>
       <section className="px-2 space-y-4">
         <div className="flex items-center justify-between px-1">
           <h2 className="text-lg font-bold text-slate-800">Mis rutas publicadas</h2>
-          <span className="text-[10px] font-black text-slate-400 uppercase bg-slate-100 px-2 py-0.5 rounded-lg">{myRoutes.length} TOTAL</span>
+          <span className="text-sm font-black text-slate-400 uppercase bg-slate-100 px-3 py-1.5 rounded-lg">{myRoutes.length} TOTAL</span>
         </div>
         
         {myRoutes.length > 0 ? (
@@ -228,15 +162,22 @@ const DriverProfile = ({ user, setIsEditing, isEditing }: DriverProfileProps) =>
                    <div className="flex items-center gap-2">
                      <div className={cn(
                        "w-8 h-8 rounded-lg flex items-center justify-center",
-                       route.status.toLowerCase() === RouteStatus.ACTIVE ? "bg-emerald-50 text-emerald-500" : "bg-slate-50 text-slate-400"
+                       route.status.toLowerCase() === RouteStatus.SCHEDULED ? "bg-blue-50 text-blue-500" :
+                       route.status.toLowerCase() === RouteStatus.IN_PROGRESS ? "bg-amber-50 text-amber-500" :
+                       route.status.toLowerCase() === RouteStatus.COMPLETED ? "bg-slate-50 text-slate-400" : "bg-red-50 text-red-500"
                      )}>
                        <Clock size={16} />
                      </div>
                      <span className={cn(
-                       "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full",
-                       route.status.toLowerCase() === RouteStatus.ACTIVE ? "bg-emerald-50 text-emerald-500" : "bg-slate-100 text-slate-500"
+                       "text-xs font-black uppercase tracking-widest px-2.5 py-1 rounded-full",
+                       route.status.toLowerCase() === RouteStatus.SCHEDULED ? "bg-blue-50 text-blue-500" :
+                       route.status.toLowerCase() === RouteStatus.IN_PROGRESS ? "bg-amber-50 text-amber-500" :
+                       route.status.toLowerCase() === RouteStatus.COMPLETED ? "bg-slate-100 text-slate-500" : "bg-red-100 text-red-500"
                      )}>
-                       {route.status.toLowerCase() === RouteStatus.ACTIVE ? 'Activa' : route.status}
+                       {route.status.toLowerCase() === RouteStatus.SCHEDULED ? 'Programado' :
+                        route.status.toLowerCase() === RouteStatus.IN_PROGRESS ? 'En progreso' :
+                        route.status.toLowerCase() === RouteStatus.COMPLETED ? 'Completado' :
+                        route.status.toLowerCase() === RouteStatus.CANCELLED ? 'Cancelado' : route.status}
                      </span>
                    </div>
                   <p className="text-xs font-bold text-slate-400">{route.date} • {route.time}</p>
@@ -256,12 +197,12 @@ const DriverProfile = ({ user, setIsEditing, isEditing }: DriverProfileProps) =>
                 <div className="pt-4 border-t border-slate-50 flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <div>
-                      <p className="text-[9px] font-black text-slate-300 uppercase">Cupos</p>
-                      <p className="text-xs font-bold text-slate-700">{route.availableSeats}/{route.totalSeats}</p>
+                      <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Cupos</p>
+                      <p className="text-sm font-bold text-slate-700 mt-0.5">{route.availableSeats}/{route.totalSeats}</p>
                     </div>
                     <div>
-                      <p className="text-[9px] font-black text-slate-300 uppercase">Precio</p>
-                      <p className="text-xs font-bold text-slate-700">${route.price}</p>
+                      <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Precio</p>
+                      <p className="text-sm font-bold text-slate-700 mt-0.5">${route.price}</p>
                     </div>
                   </div>
                   <Button 
@@ -281,6 +222,8 @@ const DriverProfile = ({ user, setIsEditing, isEditing }: DriverProfileProps) =>
             icon={RouteIcon} 
             title="No has publicado rutas aún" 
             description="Aquí aparecerán todas tus rutas pasadas y actuales."
+            action={() => navigate('/create')}
+            actionLabel="Publicar Mi Primera Ruta"
             className="bg-slate-50 border-none shadow-none"
           />
         )}
@@ -297,6 +240,7 @@ interface PassengerProfileProps {
 const PassengerProfile = ({ user }: PassengerProfileProps) => {
   const { requests, routes } = useAppStore();
   const navigate = useNavigate();
+  const [showAllHistory, setShowAllHistory] = React.useState(false);
 
    // Filter requests sent by this passenger
    const myRequests = requests.filter((r: JoinRequest) => String(r.passengerId) === String(user?.id));
@@ -312,11 +256,11 @@ const PassengerProfile = ({ user }: PassengerProfileProps) => {
       return new Date(rb.departureTime).getTime() - new Date(ra.departureTime).getTime();
    });
 
-   const myApprovedRequests = myRequests.filter(r => r.status.toLowerCase() === JoinRequestStatus.ACCEPTED);
+   const myAcceptedRequests = myRequests.filter(r => r.status.toLowerCase() === JoinRequestStatus.ACCEPTED);
    
    const passengerStats = [
     { label: 'Viajes finalizados', value: history.filter(h => h.status === JoinRequestStatus.ACCEPTED).length.toString(), icon: CheckCircle2, color: 'text-indigo-500' },
-    { label: 'Rating promedio', value: user.rating?.toString() || '—', icon: Star, color: 'text-amber-500' },
+    { label: 'Rating promedio', value: (!user?.reviewCount || user.reviewCount === 0 || !user?.rating) ? 'Nuevo' : parseFloat(user.rating.toString()).toFixed(1), icon: Star, color: 'text-amber-500' },
   ];
 
   return (
@@ -331,7 +275,7 @@ const PassengerProfile = ({ user }: PassengerProfileProps) => {
           {passengerStats.map((stat, i) => (
             <div key={i} className="card-rivo p-5 border-none bg-slate-50/50">
               <stat.icon size={18} className={cn("mb-2", stat.color)} />
-              <p className="text-[10px] uppercase font-black text-slate-400 tracking-widest">{stat.label}</p>
+              <p className="text-sm uppercase font-black text-slate-400 tracking-widest">{stat.label}</p>
               <p className="text-xl font-black text-slate-800">{stat.value}</p>
             </div>
           ))}
@@ -350,7 +294,7 @@ const PassengerProfile = ({ user }: PassengerProfileProps) => {
         
         {history.length > 0 ? (
           <div className="space-y-3">
-            {history.slice(0, 5).map((req: JoinRequest) => {
+            {(showAllHistory ? history : history.slice(0, 4)).map((req: JoinRequest) => {
               const route = routes.find((r: Route) => r.id === req.routeId);
               const isCompleted = route?.status === RouteStatus.COMPLETED && req.status === JoinRequestStatus.ACCEPTED;
               return (
@@ -364,8 +308,13 @@ const PassengerProfile = ({ user }: PassengerProfileProps) => {
                      </div>
                      <div>
                        <p className="text-sm font-bold text-slate-800">{(route?.destination || 'Ruta').split(',')[0]}</p>
-                       <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">
-                        {route?.date} • {isCompleted ? 'Completado' : req.status === JoinRequestStatus.REJECTED ? 'Rechazado' : 'Finalizado'}
+                       <p className="text-xs uppercase font-black tracking-widest text-slate-400 mt-0.5">
+                        {route?.date} • {
+                          isCompleted ? 'Completado' : 
+                          req.status === JoinRequestStatus.REJECTED ? 'Rechazado' : 
+                          req.status === JoinRequestStatus.CANCELLED_BY_DRIVER ? 'Cancelado por conductor' : 
+                          req.status === JoinRequestStatus.CANCELLED ? 'Cancelado por ti' : 'Finalizado'
+                        }
                        </p>
                      </div>
                    </div>
@@ -373,6 +322,19 @@ const PassengerProfile = ({ user }: PassengerProfileProps) => {
                 </div>
               );
             })}
+
+            {history.length > 4 && (
+              <div className="flex justify-center pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAllHistory(!showAllHistory)}
+                  className="text-primary hover:text-primary-hover text-sm font-black tracking-wider flex items-center gap-1 transition-all uppercase"
+                >
+                  {showAllHistory ? 'Ver menos' : 'Ver todo el historial'}
+                  <ArrowRight size={13} className={cn("transition-transform duration-200", showAllHistory ? "-rotate-90" : "rotate-90")} strokeWidth={2.5} />
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <EmptyState 
@@ -420,24 +382,74 @@ const ProfileView = () => {
   };
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    showToast('La foto de perfil corporativa no puede ser modificada manualmente.', 'neutral');
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      showToast('Por favor, selecciona un archivo de imagen válido.', 'error');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('La imagen no debe superar los 5MB.', 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const base64Data = reader.result as string;
+        await updateUserProfile({ avatar: base64Data });
+        setEditData(prev => ({ ...prev, avatar: base64Data }));
+        showToast('¡Foto de perfil actualizada exitosamente!', 'success');
+      } catch (err) {
+        showToast('Error al subir la imagen.', 'error');
+        console.error(err);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   return (
-    <div className="space-y-8 pb-24 overflow-x-hidden pt-4 max-w-lg mx-auto">
+    <div className="space-y-8 pb-24 overflow-x-hidden pt-4 max-w-2xl mx-auto px-4 sm:px-6">
       {/* 1. 👤 Header */}
       <header className="px-2">
         <div className="flex items-center gap-6">
            <div className="relative group">
-            <img
-              src={user?.avatar}
-              alt={user?.name}
-              className="w-24 h-24 rounded-[32px] border-4 border-white shadow-2xl object-cover"
-            />
-            <label className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/40 rounded-[32px] cursor-pointer transition-all duration-300">
-              <Camera className="text-white w-6 h-6 opacity-0 group-hover:opacity-100 transition-opacity" />
-              <input type="file" className="hidden" onChange={handleAvatarChange} accept="image/*" />
-            </label>
+            {(!user?.avatar || user.avatar.includes('gravatar') || user.avatar === '') ? (
+              <label className="w-24 h-24 rounded-[32px] bg-slate-50 border border-slate-200 flex items-center justify-center relative overflow-hidden transition-all duration-300 group-hover:border-primary group-hover:bg-slate-100 group-hover:shadow-md cursor-pointer">
+                {/* Quiet human silhouette (silueta humana gris) with brand alignment */}
+                <UserIcon className="w-11 h-11 text-slate-300 group-hover:scale-105 transition-transform duration-300" />
+                
+                {/* Subtle camera icon in the lower-right corner as a floating badge */}
+                <div className="absolute bottom-1 right-1 w-7 h-7 bg-white rounded-full flex items-center justify-center border border-slate-200 shadow-md group-hover:scale-110 transition-transform duration-300 text-slate-400 group-hover:text-primary">
+                  <Camera size={13} />
+                </div>
+                
+                {/* Visual indicator on hover */}
+                <span className="absolute inset-0 bg-primary/40 flex items-center justify-center text-xs text-white font-bold opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                  Subir Foto
+                </span>
+                <input type="file" className="hidden" onChange={handleAvatarChange} accept="image/*" />
+              </label>
+            ) : (
+              <div className="relative">
+                <img
+                  src={user?.avatar}
+                  alt={user?.name}
+                  className="w-24 h-24 rounded-[32px] border-4 border-white shadow-2xl object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                />
+                <div className="absolute bottom-0 right-0 w-7 h-7 bg-white rounded-full flex items-center justify-center border border-slate-100 shadow-md text-slate-400 group-hover:text-primary transition-transform duration-300 group-hover:scale-110">
+                  <Camera size={13} />
+                </div>
+                <label className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/45 rounded-[32px] cursor-pointer transition-all duration-350">
+                  <span className="text-white text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    Cambiar Foto
+                  </span>
+                  <input type="file" className="hidden" onChange={handleAvatarChange} accept="image/*" />
+                </label>
+              </div>
+            )}
            </div>
            <div className="flex-1">
              <h1 className="text-3xl font-black text-slate-900 tracking-tight">{user?.name}</h1>
@@ -445,9 +457,9 @@ const ProfileView = () => {
              <div className="flex items-center gap-3 mt-3">
                  <div className="flex items-center gap-1.5 bg-amber-50 text-amber-600 px-3 py-1 rounded-2xl border border-amber-100 shadow-sm">
                    <Star size={14} fill="currentColor" />
-                   <span className="text-sm font-black">{user?.rating?.toString() || '—'}</span>
+                   <span className="text-sm font-black">{(!user?.reviewCount || user.reviewCount === 0 || !user?.rating) ? 'Nuevo' : parseFloat(user.rating.toString()).toFixed(1)}</span>
                  </div>
-                 <div className="px-3 py-1 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl">
+                 <div className="px-3 py-1.5 bg-slate-900 text-white text-xs font-black uppercase tracking-wider rounded-2xl">
                    {user?.role === UserRole.DRIVER ? 'Conductor' : 'Pasajero'}
                  </div>
               </div>
@@ -519,7 +531,7 @@ const ProfileView = () => {
                     </div>
                     <div>
                       <p className="font-bold text-slate-700 text-sm">{item.label}</p>
-                      {item.badge && <span className="text-[9px] font-black uppercase tracking-widest text-slate-300">{item.badge}</span>}
+                      {item.badge && <span className="text-xs font-black uppercase tracking-wider text-slate-450 mt-1 block">{item.badge}</span>}
                     </div>
                  </div>
                  <ChevronRight size={18} className="text-slate-200" />
@@ -579,7 +591,7 @@ const ProfileView = () => {
       </Modal>
 
        <footer className="text-center py-10">
-        <p className="text-[10px] text-slate-300 font-black uppercase tracking-[0.2em]">Rivo v1.0.8 • Experiencia Pasajero • SyC</p>
+        <p className="text-xs text-slate-400 font-extrabold uppercase tracking-[0.16em]">Rivo v1.0.8 • Experiencia {user?.role === UserRole.DRIVER ? 'Conductor' : 'Pasajero'} • SyC</p>
       </footer>
     </div>
   );

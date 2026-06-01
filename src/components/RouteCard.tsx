@@ -30,12 +30,16 @@ const RouteCard: React.FC<RouteCardProps> = ({ route, onClick, status }) => {
             <div className="flex items-center gap-1 text-xs text-slate-500">
               {status ? (
                 <span className={cn(
-                  "px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider",
+                  "px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-wider",
                   status === JoinRequestStatus.PENDING ? "bg-amber-100 text-amber-700" :
                   status === JoinRequestStatus.ACCEPTED ? "bg-emerald-100 text-emerald-700" :
+                  status === JoinRequestStatus.CANCELLED_BY_DRIVER ? "bg-red-100 text-red-700" :
                   "bg-rose-100 text-rose-700"
                 )}>
-                  {status === JoinRequestStatus.PENDING ? 'Solicitado' : status === JoinRequestStatus.ACCEPTED ? 'Aceptado' : 'Rechazado'}
+                  {status === JoinRequestStatus.PENDING ? 'Solicitado' : 
+                   status === JoinRequestStatus.ACCEPTED ? 'Aceptado' : 
+                   status === JoinRequestStatus.CANCELLED_BY_DRIVER ? 'Ruta cancelada por conductor' : 
+                   'Rechazado'}
                 </span>
               ) : (
                 <>
@@ -48,7 +52,7 @@ const RouteCard: React.FC<RouteCardProps> = ({ route, onClick, status }) => {
         </div>
         <div className="text-right">
           <span className="text-lg font-bold text-primary">{formatPrice(route.price)}</span>
-          <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Por trayecto</p>
+          <p className="text-xs sm:text-[13px] text-slate-400 uppercase tracking-widest font-bold">Por trayecto</p>
         </div>
       </div>
 

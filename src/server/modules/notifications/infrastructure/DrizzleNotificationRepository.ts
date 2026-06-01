@@ -63,6 +63,8 @@ export class DrizzleNotificationRepository implements INotificationRepository {
       })
       .returning();
 
+    console.log(`[NOTIFICATION_CREATED] Created notification in DB for userId: ${notification.userId}, Title: "${notification.title}", Type: ${notification.type}`);
+
     return {
       ...result,
       id: result.id.toString(),

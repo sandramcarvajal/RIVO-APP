@@ -18,23 +18,23 @@ const RequestsView = () => {
 
   // Filter requests based on user role and tab
   const filteredRequests = requests.filter(req => {
-    const route = routes.find(r => r.id === req.routeId);
+    const route = routes.find(r => String(r.id) === String(req.routeId));
     const isPast = route ? new Date(route.departureTime) < new Date() : false;
     const isFinished = route?.status === RouteStatus.COMPLETED || route?.status === RouteStatus.CANCELLED || isPast;
     const isResolved = req.status === JoinRequestStatus.REJECTED || req.status === JoinRequestStatus.CANCELLED;
 
     if (activeTab === 'historial') {
-      return (req.passengerId === user?.id || String(route?.driverId) === String(user?.id)) && (isFinished || isResolved);
+      return (String(req.passengerId) === String(user?.id) || String(route?.driverId) === String(user?.id)) && (isFinished || isResolved);
     }
     
     // For active tabs, exclude finished or resolved requests
     if (isFinished || isResolved) return false;
 
-    if (activeTab === 'enviadas') return req.passengerId === user?.id;
+    if (activeTab === 'enviadas') return String(req.passengerId) === String(user?.id);
     return String(route?.driverId) === String(user?.id);
   }).sort((a, b) => {
-    const ra = routes.find(r => r.id === a.routeId);
-    const rb = routes.find(r => r.id === b.routeId);
+    const ra = routes.find(r => String(r.id) === String(a.routeId));
+    const rb = routes.find(r => String(r.id) === String(b.routeId));
     if (!ra || !rb) return 0;
     // History shows newest first (DESC), active shows soonest first (ASC)
     if (activeTab === 'historial') {
@@ -56,7 +56,7 @@ const RequestsView = () => {
         <button
           onClick={() => setActiveTab('recibidas')}
           className={cn(
-            "flex-1 py-3 px-2 rounded-xl font-bold text-[11px] uppercase tracking-wider transition-all",
+            "flex-1 py-3 px-2 rounded-xl font-bold text-[14px] uppercase tracking-wider transition-all",
             activeTab === 'recibidas' ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
           )}
         >
@@ -65,7 +65,7 @@ const RequestsView = () => {
         <button
           onClick={() => setActiveTab('enviadas')}
           className={cn(
-            "flex-1 py-3 px-2 rounded-xl font-bold text-[11px] uppercase tracking-wider transition-all",
+            "flex-1 py-3 px-2 rounded-xl font-bold text-[14px] uppercase tracking-wider transition-all",
             activeTab === 'enviadas' ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
           )}
         >
@@ -74,7 +74,7 @@ const RequestsView = () => {
         <button
           onClick={() => setActiveTab('historial')}
           className={cn(
-            "flex-1 py-3 px-2 rounded-xl font-bold text-[11px] uppercase tracking-wider transition-all",
+            "flex-1 py-3 px-2 rounded-xl font-bold text-[14px] uppercase tracking-wider transition-all",
             activeTab === 'historial' ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
           )}
         >
@@ -120,21 +120,21 @@ const RequestsView = () => {
                   <div className="flex items-center gap-4 text-sm text-slate-600 bg-slate-50 p-4 rounded-2xl">
                     <div className="flex-1">
                       <p className="font-bold text-slate-700">{route?.origin}</p>
-                      <p className="text-[10px] text-slate-400 font-bold">ORIGEN</p>
+                      <p className="text-sm text-slate-400 font-extrabold uppercase tracking-wider mt-0.5">ORIGEN</p>
                     </div>
-                    <ArrowRight size={16} className="text-slate-300" />
+                    <ArrowRight size={16} className="text-slate-300 animate-pulse" />
                     <div className="flex-1 text-right">
                       <p className="font-bold text-slate-700">{route?.destination}</p>
-                      <p className="text-[10px] text-slate-400 font-bold">DESTINO</p>
+                      <p className="text-sm text-slate-400 font-extrabold uppercase tracking-wider mt-0.5">DESTINO</p>
                     </div>
                   </div>
                 </div>
 
-                {activeTab === 'recibidas' && req.status === JoinRequestStatus.PENDING && (
+                 {activeTab === 'recibidas' && req.status === JoinRequestStatus.PENDING && (
                   <div className="flex md:flex-col gap-3 justify-center">
                     <Button 
                       size="sm" 
-                      onClick={() => updateRequestStatus(req.id, JoinRequestStatus.ACCEPTED)}
+                      onClick={(e) => { e.stopPropagation(); updateRequestStatus(req.id, JoinRequestStatus.ACCEPTED); }}
                       className="bg-accent hover:bg-emerald-600 shadow-accent/20"
                     >
                       <CheckCircle2 size={18} />
@@ -143,7 +143,7 @@ const RequestsView = () => {
                     <Button 
                       variant="ghost" 
                       size="sm" 
-                      onClick={() => updateRequestStatus(req.id, JoinRequestStatus.REJECTED)}
+                      onClick={(e) => { e.stopPropagation(); updateRequestStatus(req.id, JoinRequestStatus.REJECTED); }}
                       className="text-red-500 hover:bg-red-50"
                     >
                       <XCircle size={18} />
@@ -154,7 +154,12 @@ const RequestsView = () => {
                 
                 {req.status === JoinRequestStatus.ACCEPTED && (
                   <div className="flex items-center justify-center">
-                     <Button variant="secondary" size="sm" className="w-full md:w-auto">
+                     <Button 
+                       variant="secondary" 
+                       size="sm" 
+                       className="w-full md:w-auto"
+                       onClick={(e) => e.stopPropagation()}
+                     >
                         <MessageSquare size={18} />
                         Chat
                      </Button>
@@ -184,24 +189,31 @@ const RequestsView = () => {
 export default RequestsView;
 
 const Badge = ({ status }: { status: JoinRequest['status'] }) => {
-  const styles = {
+  const styles: Record<string, string> = {
     [JoinRequestStatus.PENDING]: "bg-amber-50 text-amber-600 border-amber-100",
     [JoinRequestStatus.ACCEPTED]: "bg-emerald-50 text-emerald-600 border-emerald-100",
     [JoinRequestStatus.REJECTED]: "bg-red-50 text-red-600 border-red-100",
+    [JoinRequestStatus.CANCELLED]: "bg-slate-50 text-slate-500 border-slate-100",
+    [JoinRequestStatus.CANCELLED_BY_DRIVER]: "bg-rose-50 text-rose-600 border-rose-150",
   };
   
-  const labels = {
+  const labels: Record<string, string> = {
     [JoinRequestStatus.PENDING]: "Pendiente",
     [JoinRequestStatus.ACCEPTED]: "Aprobada",
     [JoinRequestStatus.REJECTED]: "Rechazada",
+    [JoinRequestStatus.CANCELLED]: "Cancelada",
+    [JoinRequestStatus.CANCELLED_BY_DRIVER]: "Conductor Canceló",
   };
+
+  const currentStyle = styles[status] || "bg-slate-50 text-slate-400 border-slate-100";
+  const currentLabel = labels[status] || status;
 
   return (
     <span className={cn(
-      "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border",
-      styles[status]
+      "px-3 py-1.5 rounded-full text-xs sm:text-[13px] font-black uppercase tracking-widest border",
+      currentStyle
     )}>
-      {labels[status]}
+      {currentLabel}
     </span>
   );
 };

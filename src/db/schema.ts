@@ -6,23 +6,85 @@ export const users = pgTable("users", {
   password: text("password"), // Nullable for OAuth, but required for local auth
   role: text("role").notNull().default('passenger'),
   profileData: text("profile_data"), // Flexible profile data
-  rating: text("rating").default('5.0'),
+  rating: text("rating"),
+  reviewCount: integer("review_count").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const vehicles = pgTable("vehicles", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").references(() => users.id).notNull().unique(),
+  userId: integer("user_id").references(() => users.id).notNull(), // Removed unique() constraint to support N vehicles
   plate: text("plate").notNull().unique(),
   brand: text("brand"),
   model: text("model"),
   color: text("color"),
+  type: text("type").default('car'), // car / motorcycle
+  isActive: boolean("is_active").default(true),
+  availabilityStatus: text("availability_status").default('available'), // available, unavailable, maintenance
+  verifiedStatus: text("verified_status").default('pending'), // pending, approved, rejected
+  rejectReason: text("reject_reason"),
+  verifiedAt: timestamp("verified_at"),
+  verifiedBy: integer("verified_by"),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+}, (table) => {
+  return {
+    userIdIdx: index("vehicles_user_id_idx").on(table.userId),
+    isActiveIdx: index("vehicles_is_active_idx").on(table.isActive),
+  };
+});
+
+export const vehicleDocuments = pgTable("vehicle_documents", {
+  id: serial("id").primaryKey(),
+  vehicleId: integer("vehicle_id").references(() => vehicles.id).notNull(),
+  documentType: text("document_type").notNull(), // soat, property_card, tech_preventive
+  fileUrl: text("file_url").notNull(),
+  status: text("status").notNull().default('pending'), // pending, approved, rejected
+  expirationDate: timestamp("expiration_date"),
+  expirationStatus: text("expiration_status").default('valid'), // valid, expiring_soon, expired
+  rejectReason: text("reject_reason"),
+  verifiedAt: timestamp("verified_at"),
+  verifiedBy: integer("verified_by"),
+  ocrConfidence: text("ocr_confidence"),
+  ocrPlate: text("ocr_plate"),
+  ocrExtractedData: text("ocr_extracted_data"), // stringified JSON
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+  documentName: text("document_name"),
+  uploadedAt: timestamp("uploaded_at").defaultNow(),
+}, (table) => {
+  return {
+    vehicleIdIdx: index("vehicle_documents_vehicle_id_idx").on(table.vehicleId),
+  };
+});
+
+export const userDocuments = pgTable("user_documents", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  documentType: text("document_type").notNull(), // license
+  fileUrl: text("file_url").notNull(),
+  status: text("status").notNull().default('pending'), // pending, approved, rejected
+  expirationDate: timestamp("expiration_date"),
+  expirationStatus: text("expiration_status").default('valid'), // valid, expiring_soon, expired
+  rejectReason: text("reject_reason"),
+  verifiedAt: timestamp("verified_at"),
+  verifiedBy: integer("verified_by"),
+  ocrConfidence: text("ocr_confidence"),
+  ocrExtractedData: text("ocr_extracted_data"), // stringified JSON
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+  documentName: text("document_name"),
+  uploadedAt: timestamp("uploaded_at").defaultNow(),
+}, (table) => {
+  return {
+    userIdIdx: index("user_documents_user_id_idx").on(table.userId),
+  };
 });
 
 export const routes = pgTable("routes", {
   id: serial("id").primaryKey(),
   driverId: integer("driver_id").references(() => users.id).notNull(),
+  vehicleId: integer("vehicle_id").references(() => vehicles.id), // Nullable for compatibility
   origin: text("origin").notNull(),
   originCoords: text("origin_coords"), // JSON or stringified coords
   destination: text("destination").notNull(),
@@ -35,6 +97,10 @@ export const routes = pgTable("routes", {
   status: text("status").notNull().default('scheduled'), // scheduled, in_progress, completed, cancelled
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
+}, (table) => {
+  return {
+    vehicleIdIdx: index("routes_vehicle_id_idx").on(table.vehicleId),
+  };
 });
 
 export const joinRequests = pgTable("join_requests", {

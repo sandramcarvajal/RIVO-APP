@@ -38,12 +38,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (response.ok) {
         const data = await response.json();
         console.log(`[AppContext] Fetched ${data.length} active routes:`, data.map((r: any) => ({ id: r.id, status: r.status })));
-        setRoutes(data);
+        setRoutes(prev => {
+          const activeIds = new Set(data.map((r: any) => r.id));
+          const filteredPrev = prev.filter(r => {
+            const isMyRoute = String(r.driverId) === String(user?.id);
+            const isStillActive = activeIds.has(r.id);
+            // Non-driver routes that are scheduled/in_progress but no longer in the active routes payload are removed
+            if (!isMyRoute && !isStillActive && ['scheduled', 'in_progress'].includes(r.status.toLowerCase())) {
+              return false;
+            }
+            return true;
+          });
+          const map = new Map(filteredPrev.map(r => [r.id, r]));
+          data.forEach((r: any) => map.set(r.id, r));
+          return Array.from(map.values());
+        });
       }
     } catch (error) {
       console.error('Error fetching routes:', error);
     }
-  }, []);
+  }, [user]);
 
   const fetchMyRoutes = useCallback(async () => {
     try {
@@ -95,14 +109,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       fetchRequests();
       fetchNotifications();
 
-      // Poll for updates every 30 seconds
+      // Poll for updates every 10 seconds
       const pollInterval = setInterval(() => {
         fetchNotifications();
         fetchRequests();
+        fetchRoutes();
         if (user.role === 'driver') {
           fetchMyRoutes();
         }
-      }, 30000);
+      }, 10000);
 
       return () => clearInterval(pollInterval);
     } else {
@@ -112,8 +127,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [user, fetchRoutes, fetchMyRoutes, fetchRequests, fetchNotifications]);
 
+  const lockRef = React.useRef<Record<string, boolean>>({});
+
   const createRoute = async (routeData: any) => {
     if (!user) return;
+    const lockKey = `createRoute`;
+    if (lockRef.current[lockKey]) {
+      console.warn(`[AppContext] Blocked duplicate createRoute call`);
+      return;
+    }
+    lockRef.current[lockKey] = true;
+
     const body = {
       ...routeData,
       departureTime: new Date(`${routeData.date}T${routeData.time}`).toISOString(),
@@ -149,69 +173,175 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (error) {
       console.error('Error creating route:', error);
       throw error;
+    } finally {
+      lockRef.current[lockKey] = false;
     }
   };
 
   const requestJoin = async (routeId: string) => {
-    if (!user) return;
+    if (!user) throw new Error("Debe iniciar sesión para solicitar unirse.");
+    const lockKey = `requestJoin-${routeId}`;
+    if (lockRef.current[lockKey]) {
+      console.warn(`[AppContext] Blocked duplicate requestJoin call for route ${routeId}`);
+      return;
+    }
+    lockRef.current[lockKey] = true;
+
     try {
       const response = await SecureHttpClient.request('/api/requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ routeId: parseInt(routeId) })
+        body: JSON.stringify({ routeId: parseInt(routeId, 10) })
       });
       if (response.ok) {
-        fetchRequests();
-        fetchNotifications();
+        await Promise.all([fetchRequests(), fetchNotifications()]);
+      } else {
+        let errorMessage = "No se pudo enviar la solicitud para unirse al viaje";
+        try {
+          const contentType = response.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const errorData = await response.json();
+            errorMessage = errorData.error || errorMessage;
+          } else {
+            const textContent = await response.text();
+            console.error('Non-JSON error response in requestJoin:', textContent.substring(0, 500));
+            errorMessage = `Error del servidor (${response.status}).`;
+          }
+        } catch (e) {
+          console.error('Failed to parse requestJoin error response:', e);
+        }
+        throw new Error(errorMessage);
       }
     } catch (error) {
-      console.error('Error requesting join:', error);
+      console.error('Error in requestJoin:', error);
+      throw error;
+    } finally {
+      lockRef.current[lockKey] = false;
     }
   };
 
   const updateRequestStatus = async (requestId: string, status: JoinRequestStatus.ACCEPTED | JoinRequestStatus.REJECTED) => {
+    const lockKey = `updateRequestStatus-${requestId}`;
+    if (lockRef.current[lockKey]) {
+      console.warn(`[AppContext] Blocked duplicate updateRequestStatus for request ${requestId}`);
+      return;
+    }
+    lockRef.current[lockKey] = true;
+
+    const currentUser = user;
+    console.log("[CLIENT USER]");
+    console.log(currentUser);
+
+    console.log("[REQUEST STATUS UPDATE]");
+    console.log(requestId);
+    console.log(status);
+
     try {
       const response = await SecureHttpClient.request(`/api/requests/${requestId}`, {
-        method: 'PATCH',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status })
       });
-      if (response.ok) {
-        fetchRequests();
-        fetchRoutes();
-        fetchNotifications();
+      if (!response.ok) {
+        let errorMsg = 'No se pudo actualizar la solicitud';
+        try {
+          const clone = response.clone();
+          const errData = await clone.json().catch(() => null);
+          if (errData && errData.error) {
+            errorMsg = errData.error;
+          } else {
+            const txt = await response.text().catch(() => '');
+            if (txt) {
+              errorMsg = txt;
+            }
+          }
+        } catch (readErr) {
+          console.error('[AppContext] Error reading response body:', readErr);
+        }
+        throw new Error(errorMsg);
       }
+      await Promise.all([
+        fetchRequests(),
+        fetchRoutes(),
+        fetchNotifications()
+      ]);
     } catch (error) {
       console.error('Error updating request status:', error);
+      throw error;
+    } finally {
+      lockRef.current[lockKey] = false;
     }
   };
 
   const cancelJoinRequest = async (requestId: string) => {
+    const lockKey = `cancelJoinRequest-${requestId}`;
+    if (lockRef.current[lockKey]) {
+      console.warn(`[AppContext] Blocked duplicate cancelJoinRequest for request ${requestId}`);
+      return;
+    }
+    lockRef.current[lockKey] = true;
+
     try {
-      const response = await SecureHttpClient.request(`/api/requests/${requestId}`, {
-        method: 'DELETE'
+      const response = await SecureHttpClient.request(`/api/requests/${requestId}/cancel`, {
+        method: 'POST'
       });
       if (response.ok) {
-        fetchRequests();
-        fetchRoutes();
+        await Promise.all([
+          fetchRequests(),
+          fetchRoutes()
+        ]);
       }
     } catch (error) {
       console.error('Error cancelling request:', error);
+    } finally {
+      lockRef.current[lockKey] = false;
     }
   };
 
   const updateRouteStatus = async (routeId: string, status: string) => {
+    const lockKey = `updateRouteStatus-${routeId}`;
+    if (lockRef.current[lockKey]) {
+      console.warn(`[AppContext] Blocked duplicate updateRouteStatus for route ${routeId}`);
+      return;
+    }
+    lockRef.current[lockKey] = true;
+
     try {
       const response = await SecureHttpClient.request(`/api/routes/${routeId}/status`, {
-        method: 'PATCH',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status })
       });
-      if (response.ok) {
-        fetchRoutes();
+      if (!response.ok) {
+        let errorMsg = 'No se pudo actualizar el estado de la ruta';
+        try {
+          const clone = response.clone();
+          const errData = await clone.json().catch(() => null);
+          if (errData && errData.error) {
+            errorMsg = errData.error;
+          } else {
+            const txt = await response.text().catch(() => '');
+            if (txt) {
+              errorMsg = txt;
+            }
+          }
+        } catch (readErr) {
+          console.error('[AppContext] Error reading route status update error response:', readErr);
+        }
+        throw new Error(errorMsg);
+      }
+      const updatedRoute = await response.json();
+      setRoutes(prev => prev.map(r => r.id === updatedRoute.id ? updatedRoute : r));
+      
+      await fetchRoutes();
+      if (user?.role === 'driver') {
+        await fetchMyRoutes();
       }
     } catch (error) {
       console.error('Error updating route status:', error);
+      throw error;
+    } finally {
+      lockRef.current[lockKey] = false;
     }
   };
 

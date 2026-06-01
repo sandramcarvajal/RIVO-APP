@@ -12,7 +12,7 @@ reviewRouter.post("/", authMiddleware, async (req: AuthRequest, res) => {
     const { routeId, toUserId, score, comment } = req.body;
     const fromUserId = parseInt(req.user!.userId);
 
-    if (fromUserId === parseInt(toUserId)) {
+    if (String(fromUserId) === String(toUserId)) {
       return res.status(400).json({ error: "No puedes calificarte a ti mismo" });
     }
 
@@ -26,7 +26,7 @@ reviewRouter.post("/", authMiddleware, async (req: AuthRequest, res) => {
     }
 
     // Validate that the toUserId is part of the route (either driver or accepted passenger)
-    const isDriver = route.driverId === parseInt(toUserId);
+    const isDriver = String(route.driverId) === String(toUserId);
     let isPassenger = false;
 
     if (!isDriver) {
@@ -34,7 +34,7 @@ reviewRouter.post("/", authMiddleware, async (req: AuthRequest, res) => {
         and(
           eq(joinRequests.routeId, parseInt(routeId)),
           eq(joinRequests.passengerId, parseInt(toUserId)),
-          sql`LOWER(${joinRequests.status}) = 'accepted'`
+          eq(joinRequests.status, 'accepted')
         )
       );
       isPassenger = !!request;
@@ -66,19 +66,23 @@ reviewRouter.post("/", authMiddleware, async (req: AuthRequest, res) => {
       comment
     }).returning();
 
-    // Update target user average rating
+    // Update target user average rating and reviewCount
     const [stats] = await db.select({
       avgScore: sql<number>`avg(${ratings.score})`,
       count: sql<number>`count(*)`
     }).from(ratings).where(eq(ratings.toUserId, parseInt(toUserId)));
 
     if (stats) {
-      const roundedRating = parseFloat(Number(stats.avgScore).toFixed(1));
+      const totalCount = Number(stats.count);
+      const roundedRating = totalCount > 0 ? parseFloat(Number(stats.avgScore).toFixed(1)) : null;
       await db.update(users)
-        .set({ rating: roundedRating.toString() })
+        .set({ 
+          rating: roundedRating !== null ? roundedRating.toString() : null,
+          reviewCount: totalCount
+        })
         .where(eq(users.id, parseInt(toUserId)));
         
-      console.log(`[ReviewRouter] Updated user ${toUserId} rating to ${roundedRating}`);
+      console.log(`[ReviewRouter] Updated user ${toUserId} rating to ${roundedRating}, count to ${totalCount}`);
     }
 
     res.status(201).json(created);

@@ -13,4 +13,9 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
+// Handle unexpected errors on idle clients to prevent Node crashes
+pool.on('error', (err) => {
+  console.error('Unexpected error on idle pg client', err);
+});
+
 export const db = drizzle(pool, { schema, logger: true });

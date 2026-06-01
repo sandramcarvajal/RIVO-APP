@@ -22,6 +22,7 @@ import { cn, formatPrice, formatTime } from '../lib/utils';
 import { RouteStatus, JoinRequestStatus } from '../shared/enums';
 import { useToast } from '../components/ui/Toast';
 import RatingModal from '../components/ui/RatingModal';
+import Modal from '../components/ui/Modal';
 
 const RouteDetailView = () => {
   const { id } = useParams<{ id: string }>();
@@ -34,18 +35,26 @@ const RouteDetailView = () => {
     updateRequestStatus, 
     cancelJoinRequest,
     getRoutePassengers,
-    submitReview
+    submitReview,
+    requestJoin
   } = useAppContext();
   const { showToast } = useToast();
 
   const [routePassengers, setRoutePassengers] = useState<any[]>([]);
   const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
   const [ratingTarget, setRatingTarget] = useState<{ id: string, name: string } | null>(null);
+  
+  const [isStarting, setIsStarting] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
+  const [requestActionLoading, setRequestActionLoading] = useState<Record<string, 'accept' | 'reject' | null>>({});
+  const [isRequestingJoin, setIsRequestingJoin] = useState(false);
 
-  const route = routes.find(r => r.id === id);
+  const route = routes.find(r => String(r.id) === String(id));
   const isDriver = String(user?.id) === String(route?.driverId);
-  const myRequest = requests.find(r => r.routeId === id && String(r.passengerId) === String(user?.id));
-  const pendingRequests = requests.filter(r => r.routeId === id && r.status === JoinRequestStatus.PENDING && isDriver);
+  const myRequest = requests.find(r => String(r.routeId) === String(id) && String(r.passengerId) === String(user?.id));
+  const pendingRequests = requests.filter(r => String(r.routeId) === String(id) && String(r.status).toLowerCase() === String(JoinRequestStatus.PENDING).toLowerCase() && isDriver);
 
   useEffect(() => {
     if (id && isDriver) {
@@ -63,51 +72,82 @@ const RouteDetailView = () => {
   }
 
   const handleStartTrip = async () => {
+    setIsStarting(true);
     try {
       await updateRouteStatus(route.id, RouteStatus.IN_PROGRESS);
       showToast('¡Viaje iniciado! Conduce con cuidado.');
-    } catch (err) {
-      showToast('Error al iniciar viaje', 'error');
+    } catch (err: any) {
+      showToast(err.message || 'Error al iniciar viaje', 'error');
+    } finally {
+      setIsStarting(false);
     }
   };
 
   const handleCompleteTrip = async () => {
+    setIsCompleting(true);
     try {
       await updateRouteStatus(route.id, RouteStatus.COMPLETED);
       showToast('¡Viaje finalizado exitosamente!');
-    } catch (err) {
-      showToast('Error al finalizar viaje', 'error');
+    } catch (err: any) {
+      showToast(err.message || 'Error al finalizar viaje', 'error');
+    } finally {
+      setIsCompleting(false);
     }
   };
 
-  const handleCancelRoute = async () => {
-    if (window.confirm('¿Estás seguro de que quieres cancelar esta ruta?')) {
-      try {
-        await updateRouteStatus(route.id, RouteStatus.CANCELLED);
-        showToast('Ruta cancelada');
-        navigate(-1);
-      } catch (err) {
-        showToast('Error al cancelar ruta', 'error');
-      }
+  const handleCancelRoute = () => {
+    setIsCancelConfirmOpen(true);
+  };
+
+  const confirmCancelRoute = async () => {
+    setIsCancelling(true);
+    try {
+      await updateRouteStatus(route.id, RouteStatus.CANCELLED);
+      showToast('Su ruta fue cancelada con éxito.', 'success');
+      setIsCancelConfirmOpen(false);
+      navigate(-1);
+    } catch (err: any) {
+      showToast(err.message || 'Error al cancelar ruta', 'error');
+    } finally {
+      setIsCancelling(false);
     }
   };
 
   const handleAcceptRequest = async (requestId: string) => {
+    setRequestActionLoading(prev => ({ ...prev, [requestId]: 'accept' }));
     try {
       await updateRequestStatus(requestId, JoinRequestStatus.ACCEPTED);
-      showToast('Pasajero aceptado');
-      getRoutePassengers(route.id).then(setRoutePassengers);
-    } catch (err) {
-      showToast('Error al aceptar pasajero', 'error');
+      showToast('Pasajero aceptado con éxito');
+      const updatedPassengers = await getRoutePassengers(route.id);
+      setRoutePassengers(updatedPassengers);
+    } catch (err: any) {
+      showToast(err.message || 'Error al aceptar pasajero', 'error');
+    } finally {
+      setRequestActionLoading(prev => ({ ...prev, [requestId]: null }));
     }
   };
 
   const handleRejectRequest = async (requestId: string) => {
+    setRequestActionLoading(prev => ({ ...prev, [requestId]: 'reject' }));
     try {
       await updateRequestStatus(requestId, JoinRequestStatus.REJECTED);
       showToast('Solicitud rechazada');
-    } catch (err) {
-      showToast('Error al rechazar solicitud', 'error');
+    } catch (err: any) {
+      showToast(err.message || 'Error al rechazar solicitud', 'error');
+    } finally {
+      setRequestActionLoading(prev => ({ ...prev, [requestId]: null }));
+    }
+  };
+
+  const handleRequestJoin = async () => {
+    setIsRequestingJoin(true);
+    try {
+      await requestJoin(route.id);
+      showToast('Solicitud enviada correctamente');
+    } catch (err: any) {
+      showToast(err.message || 'Error al solicitar cupo', 'error');
+    } finally {
+      setIsRequestingJoin(false);
     }
   };
 
@@ -128,7 +168,6 @@ const RouteDetailView = () => {
 
   const statusColors = {
     [RouteStatus.SCHEDULED]: 'bg-blue-50 text-blue-500 border-blue-100',
-    [RouteStatus.ACTIVE]: 'bg-emerald-50 text-emerald-500 border-emerald-100',
     [RouteStatus.IN_PROGRESS]: 'bg-amber-50 text-amber-500 border-amber-100',
     [RouteStatus.COMPLETED]: 'bg-slate-100 text-slate-500 border-slate-200',
     [RouteStatus.CANCELLED]: 'bg-red-50 text-red-500 border-red-100',
@@ -157,7 +196,6 @@ const RouteDetailView = () => {
         )} />
         {route.status === RouteStatus.IN_PROGRESS ? 'En progreso' : 
          route.status === RouteStatus.SCHEDULED ? 'Programado' :
-         route.status === RouteStatus.ACTIVE ? 'Activa' :
          route.status === RouteStatus.COMPLETED ? 'Completado' :
          route.status === RouteStatus.CANCELLED ? 'Cancelado' : route.status}
       </div>
@@ -202,15 +240,15 @@ const RouteDetailView = () => {
       <div className="grid grid-cols-2 gap-4">
          <div className="card-rivo p-4 bg-slate-50 border-none">
             <Clock size={16} className="text-primary mb-2" />
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Salida</p>
+            <p className="text-xs font-black text-slate-400 uppercase tracking-wider">Salida</p>
             <p className="font-bold text-slate-800">{formatTime(route.departureTime)}</p>
-            <p className="text-[10px] text-slate-500">{route.date}</p>
+            <p className="text-xs text-slate-500 font-medium">{route.date}</p>
          </div>
          <div className="card-rivo p-4 bg-slate-50 border-none">
             <Car size={16} className="text-accent mb-2" />
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Precio</p>
+            <p className="text-xs font-black text-slate-400 uppercase tracking-wider">Precio</p>
             <p className="font-bold text-slate-800">{formatPrice(route.price)}</p>
-            <p className="text-[10px] text-slate-500">Por persona</p>
+            <p className="text-xs text-slate-500 font-medium">Por persona</p>
          </div>
       </div>
 
@@ -240,7 +278,7 @@ const RouteDetailView = () => {
                         <img src={req.passengerAvatar} className="w-10 h-10 rounded-xl" />
                         <div>
                           <p className="text-sm font-bold text-slate-800">{req.passengerName}</p>
-                          <p className="text-[10px] text-slate-500 font-medium">Quiere unirse</p>
+                          <p className="text-xs text-slate-500 font-medium">Quiere unirse</p>
                         </div>
                       </div>
                       <div className="flex gap-2">
@@ -249,16 +287,20 @@ const RouteDetailView = () => {
                           variant="ghost" 
                           className="h-8 w-8 p-0 rounded-full bg-white border border-slate-100 text-red-500"
                           onClick={() => handleRejectRequest(req.id)}
+                          isLoading={requestActionLoading[req.id] === 'reject'}
+                          disabled={!!requestActionLoading[req.id]}
                         >
-                          <XCircle size={18} />
+                          {requestActionLoading[req.id] !== 'reject' && <XCircle size={18} />}
                         </Button>
                         <Button 
                           size="sm" 
                           variant="ghost" 
                           className="h-8 w-8 p-0 rounded-full bg-primary text-white"
                           onClick={() => handleAcceptRequest(req.id)}
+                          isLoading={requestActionLoading[req.id] === 'accept'}
+                          disabled={!!requestActionLoading[req.id]}
                         >
-                          <CheckCircle2 size={18} />
+                          {requestActionLoading[req.id] !== 'accept' && <CheckCircle2 size={18} />}
                         </Button>
                       </div>
                     </motion.div>
@@ -296,17 +338,32 @@ const RouteDetailView = () => {
 
             {/* Driver Actions */}
             <div className="pt-6 border-t border-slate-100 space-y-3">
-              {route.status === RouteStatus.SCHEDULED || route.status === RouteStatus.ACTIVE ? (
+              {route.status === RouteStatus.SCHEDULED ? (
                 <>
-                  <Button className="w-full py-6 rounded-2xl bg-primary text-white" onClick={handleStartTrip}>
+                  <Button 
+                    className="w-full py-6 rounded-2xl bg-primary text-white font-bold" 
+                    onClick={handleStartTrip}
+                    isLoading={isStarting}
+                    disabled={isStarting || isCancelling}
+                  >
                     Iniciar Viaje
                   </Button>
-                  <Button variant="ghost" className="w-full text-red-500" onClick={handleCancelRoute}>
+                  <Button 
+                    variant="ghost" 
+                    className="w-full text-red-500 font-bold" 
+                    onClick={handleCancelRoute}
+                    disabled={isStarting || isCancelling}
+                  >
                     Cancelar Ruta
                   </Button>
                 </>
               ) : route.status === RouteStatus.IN_PROGRESS ? (
-                <Button className="w-full py-6 rounded-2xl bg-emerald-500 text-white" onClick={handleCompleteTrip}>
+                <Button 
+                  className="w-full py-6 rounded-2xl bg-emerald-500 text-white font-bold" 
+                  onClick={handleCompleteTrip}
+                  isLoading={isCompleting}
+                  disabled={isCompleting}
+                >
                   Finalizar Viaje
                 </Button>
               ) : null}
@@ -319,17 +376,22 @@ const RouteDetailView = () => {
                <div className="flex items-center gap-4">
                  <div className={cn(
                    "w-12 h-12 rounded-2xl flex items-center justify-center",
-                   myRequest?.status === JoinRequestStatus.ACCEPTED ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-400"
+                   myRequest?.status === JoinRequestStatus.ACCEPTED ? "bg-emerald-500 text-white" : 
+                   myRequest?.status === JoinRequestStatus.CANCELLED_BY_DRIVER ? "bg-rose-500 text-white" : "bg-slate-200 text-slate-400"
                  )}>
-                   {myRequest?.status === JoinRequestStatus.ACCEPTED ? <CheckCircle2 size={24} /> : <Clock size={24} />}
+                   {myRequest?.status === JoinRequestStatus.ACCEPTED ? <CheckCircle2 size={24} /> : 
+                    myRequest?.status === JoinRequestStatus.CANCELLED_BY_DRIVER ? <XCircle size={24} /> : <Clock size={24} />}
                  </div>
                  <div>
                     <p className="font-bold text-slate-900">
                       {myRequest?.status === JoinRequestStatus.ACCEPTED ? '¡Estás confirmado!' : 
-                       myRequest?.status === JoinRequestStatus.PENDING ? 'Solicitud pendiente' : 'Sin solicitud'}
+                       myRequest?.status === JoinRequestStatus.PENDING ? 'Solicitud pendiente' : 
+                       myRequest?.status === JoinRequestStatus.CANCELLED_BY_DRIVER ? 'El conductor canceló el viaje' : 'Sin solicitud'}
                     </p>
                     <p className="text-xs text-slate-500">
-                      {myRequest?.status === JoinRequestStatus.ACCEPTED ? 'Tu asiento está reservado.' : 'Espera a que el conductor acepte.'}
+                      {myRequest?.status === JoinRequestStatus.ACCEPTED ? 'Tu asiento está reservado.' : 
+                       myRequest?.status === JoinRequestStatus.PENDING ? 'Espera a que el conductor acepte.' : 
+                       myRequest?.status === JoinRequestStatus.CANCELLED_BY_DRIVER ? 'Este viaje fue cancelado por el conductor.' : ''}
                     </p>
                  </div>
                </div>
@@ -341,10 +403,41 @@ const RouteDetailView = () => {
                )}
 
                {myRequest?.status === JoinRequestStatus.PENDING && (
-                 <Button variant="ghost" className="w-full text-red-500" onClick={() => cancelJoinRequest(myRequest.id)}>
-                   Abandonar Solicitud
-                 </Button>
-               )}
+                  <Button variant="ghost" className="w-full text-red-500" onClick={() => cancelJoinRequest(myRequest.id)}>
+                    Abandonar Solicitud
+                  </Button>
+                )}
+
+                {!myRequest && (
+                  <div className="pt-2">
+                    {route.status === RouteStatus.SCHEDULED ? (
+                      route.availableSeats > 0 ? (
+                        <Button 
+                          className="w-full py-6 rounded-2xl bg-primary text-white font-bold h-12 flex items-center justify-center mt-4" 
+                          onClick={handleRequestJoin}
+                          isLoading={isRequestingJoin}
+                          disabled={isRequestingJoin}
+                        >
+                          Solicitar cupo
+                        </Button>
+                      ) : (
+                        <Button 
+                          className="w-full py-6 rounded-2xl bg-slate-200 text-slate-400 font-bold h-12 flex items-center justify-center cursor-not-allowed mt-4" 
+                          disabled
+                        >
+                          No hay cupos disponibles
+                        </Button>
+                      )
+                    ) : (
+                      <Button 
+                        className="w-full py-6 rounded-2xl bg-slate-200 text-slate-400 font-bold h-12 flex items-center justify-center cursor-not-allowed mt-4" 
+                        disabled
+                      >
+                        El viaje no acepta solicitudes ({route.status === RouteStatus.IN_PROGRESS ? 'En progreso' : route.status === RouteStatus.COMPLETED ? 'Completado' : 'Cancelado'})
+                      </Button>
+                    )}
+                  </div>
+                )}
             </div>
 
             {/* Insurance/Support Info */}
@@ -352,7 +445,7 @@ const RouteDetailView = () => {
                <ShieldCheck className="text-emerald-500 shrink-0" size={24} />
                <div>
                   <p className="text-xs font-bold text-emerald-900">Viaje Protegido</p>
-                  <p className="text-[10px] text-emerald-700">Este trayecto cuenta con el respaldo de seguridad de Rivo y S&C.</p>
+                  <p className="text-xs sm:text-[13px] text-emerald-700 font-semibold">Este trayecto cuenta con el respaldo de seguridad de Rivo y S&C.</p>
                </div>
             </div>
           </div>
@@ -363,7 +456,7 @@ const RouteDetailView = () => {
       <section className="px-1 py-4">
         <div className="flex items-start gap-3 bg-amber-50 p-4 rounded-3xl border border-amber-100">
           <AlertTriangle className="text-amber-500 shrink-0" size={20} />
-          <p className="text-[10px] text-amber-700 leading-relaxed">
+          <p className="text-xs sm:text-[13px] text-amber-800 font-semibold leading-relaxed">
             Recordatorio: Mantén siempre la comunicación dentro de la plataforma. Si el viaje no se realiza según lo planeado, repórtalo en el centro de ayuda.
           </p>
         </div>
@@ -377,6 +470,32 @@ const RouteDetailView = () => {
           onSubmit={onRatingSubmit}
         />
       )}
+
+      <Modal
+        isOpen={isCancelConfirmOpen}
+        onClose={() => setIsCancelConfirmOpen(false)}
+        title="Cancelar Ruta"
+        footer={
+          <div className="flex gap-3 w-full">
+            <Button variant="secondary" onClick={() => setIsCancelConfirmOpen(false)} className="flex-1 rounded-2xl">
+              No, mantener
+            </Button>
+            <Button 
+              onClick={confirmCancelRoute} 
+              isLoading={isCancelling}
+              className="flex-1 bg-red-500 hover:bg-red-600 text-white rounded-2xl font-bold"
+            >
+              Sí, cancelar
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-3 pt-2 text-slate-600 text-sm font-medium leading-relaxed">
+          <p>
+            ¿Estás seguro de que quieres cancelar esta ruta? Esta acción cancelará todos los cupos reservados y notificará a tus pasajeros confirmados de inmediato.
+          </p>
+        </div>
+      </Modal>
     </div>
   );
 };

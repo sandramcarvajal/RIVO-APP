@@ -1,15 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { GoogleMap, useJsApiLoader, Marker } from '@react-google-maps/api';
+import { RIVO_CONFIG } from '../shared/config';
 
 const containerStyle = {
   width: '100%',
   height: '400px'
 };
 
-const defaultCenter = {
-  lat: 7.1193, // Bucaramanga, Colombia
-  lng: -73.1227
-};
+const defaultCenter = RIVO_CONFIG.map.defaultCenter;
 
 const GOOGLE_MAPS_LIBRARIES: any[] = ["places", "geometry"];
 

@@ -112,7 +112,7 @@ authRouter.get("/me/:email", async (req, res) => {
   }
 });
 
-authRouter.patch("/me", authMiddleware, async (req: AuthRequest, res) => {
+const handleUpdateProfile = async (req: AuthRequest, res: any) => {
   try {
     const userId = req.user!.userId;
     const { name, avatar, bio } = req.body;
@@ -145,6 +145,9 @@ authRouter.patch("/me", authMiddleware, async (req: AuthRequest, res) => {
     console.error(`[AuthRouter] Error updating profile:`, error);
     res.status(500).json({ error: "Error al actualizar perfil" });
   }
-});
+};
+
+authRouter.patch("/me", authMiddleware, handleUpdateProfile);
+authRouter.post("/me", authMiddleware, handleUpdateProfile);
 
 export { authRouter };

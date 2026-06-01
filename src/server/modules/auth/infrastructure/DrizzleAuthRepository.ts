@@ -9,16 +9,19 @@ export class DrizzleAuthRepository implements IAuthRepository {
       const normalizedEmail = email.toLowerCase().trim();
       console.log(`[DrizzleAuthRepository] Finding user by email: ${normalizedEmail}`);
       const [user] = await db.select().from(users).where(eq(users.email, normalizedEmail));
+
       if (!user) {
         console.log(`[DrizzleAuthRepository] User not found: ${normalizedEmail}`);
         return null;
       }
       
       let name = "";
+      let avatar = undefined;
       if (user.profileData) {
         try {
           const profile = JSON.parse(user.profileData);
           name = profile.name || "";
+          avatar = profile.avatar || undefined;
         } catch (e) {
           console.error(`[DrizzleAuthRepository] Error parsing profileData for ${email}:`, e);
         }
@@ -30,8 +33,10 @@ export class DrizzleAuthRepository implements IAuthRepository {
         password: user.password || undefined,
         role: user.role as any,
         name: name,
+        avatar: avatar,
         profileData: user.profileData || undefined,
         rating: user.rating || undefined,
+        reviewCount: user.reviewCount ?? 0,
         createdAt: user.createdAt || new Date()
       };
     } catch (error) {
@@ -50,10 +55,12 @@ export class DrizzleAuthRepository implements IAuthRepository {
       }
 
       let name = "";
+      let avatar = undefined;
       if (user.profileData) {
         try {
           const profile = JSON.parse(user.profileData);
           name = profile.name || "";
+          avatar = profile.avatar || undefined;
         } catch (e) {
           console.error(`[DrizzleAuthRepository] Error parsing profileData for id ${id}:`, e);
         }
@@ -65,8 +72,10 @@ export class DrizzleAuthRepository implements IAuthRepository {
         password: user.password || undefined,
         role: user.role as any,
         name: name,
+        avatar: avatar,
         profileData: user.profileData || undefined,
         rating: user.rating || undefined,
+        reviewCount: user.reviewCount ?? 0,
         createdAt: user.createdAt || new Date()
       };
     } catch (error) {
@@ -95,6 +104,7 @@ export class DrizzleAuthRepository implements IAuthRepository {
         name: user.name,
         profileData: created.profileData || undefined,
         rating: created.rating || undefined,
+        reviewCount: created.reviewCount ?? 0,
         createdAt: created.createdAt || new Date()
       };
     } catch (error) {

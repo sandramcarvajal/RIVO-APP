@@ -3,6 +3,13 @@ import { IHasher, ITokenService, AuthTokens } from "../domain/ISecurityService";
 import { IVehicleRepository } from "../../vehicles/domain/IVehicleRepository";
 import { normalizeEmail } from "../../../core/utils/normalization";
 
+export class InvalidCredentialsError extends Error {
+  constructor() {
+    super("Credenciales inválidas.");
+    this.name = "InvalidCredentialsError";
+  }
+}
+
 export interface LoginUserInput {
   email: string;
   password?: string;
@@ -14,6 +21,8 @@ export interface LoginUserOutput {
     name: string;
     email: string;
     role: string;
+    rating?: string;
+    reviewCount?: number;
     vehicle?: {
       plate: string;
       brand: string;
@@ -32,26 +41,23 @@ export class LoginUserUseCase {
   ) {}
 
   async execute(input: LoginUserInput): Promise<LoginUserOutput> {
+    const normalizedEmail = normalizeEmail(input.email);
     try {
-      const normalizedEmail = normalizeEmail(input.email);
       console.log(`[LoginUserUseCase] Attempting login for email: ${normalizedEmail}`);
       const user = await this.authRepository.findByEmail(normalizedEmail);
       
       if (!user) {
-        console.warn(`[LoginUserUseCase] Login failed: User not found for email ${normalizedEmail}`);
-        throw new Error("Credenciales inválidas.");
+        throw new InvalidCredentialsError();
       }
 
       // Compare passwords
       if (input.password && user.password) {
         const isMatch = await this.hasher.compare(input.password, user.password);
         if (!isMatch) {
-          console.warn(`[LoginUserUseCase] Login failed: Password mismatch for ${input.email}`);
-          throw new Error("Credenciales inválidas.");
+          throw new InvalidCredentialsError();
         }
       } else if (input.password || user.password) {
-        console.warn(`[LoginUserUseCase] Login failed: Password missing in logic for ${input.email}`);
-        throw new Error("Credenciales inválidas.");
+        throw new InvalidCredentialsError();
       }
 
       // Fetch vehicle if driver
@@ -66,19 +72,25 @@ export class LoginUserUseCase {
         role: user.role
       });
 
-      console.log(`[LoginUserUseCase] Login successful for: ${input.email}`);
+      console.log(`[LoginUserUseCase] Login successful for: ${normalizedEmail}`);
       return {
         user: {
           id: user.id,
           name: user.name,
           email: user.email,
           role: user.role,
+          rating: user.rating,
+          reviewCount: user.reviewCount,
           vehicle
         },
         tokens
       };
     } catch (error) {
-      console.error(`[LoginUserUseCase] ERROR during login for ${input.email}:`, error);
+      if (error instanceof InvalidCredentialsError) {
+        console.warn(`[LoginUserUseCase] Invalid credentials for ${normalizedEmail}`);
+      } else {
+        console.error(`[LoginUserUseCase] ERROR during login for ${normalizedEmail}:`, error);
+      }
       throw error;
     }
   }

@@ -13,7 +13,4 @@
   
   <!-- Text Rivo -->
   <text x="60" y="45" font-family="Outfit, sans-serif" font-weight="800" font-size="32" fill="#0f172a">Rivo</text>
-  
-  <!-- Slogan -->
-  <text x="12" y="65" font-family="Inter, sans-serif" font-weight="500" font-size="10" fill="#64748b">Comparte tu ruta, a tu ritmo</text>
 </svg>

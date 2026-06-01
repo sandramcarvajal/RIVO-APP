@@ -16,6 +16,17 @@ const AuthView = () => {
   const { register, login: authLogin, isLoading, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [isCookieBlocked, setIsCookieBlocked] = React.useState(false);
+
+  React.useEffect(() => {
+    const handleCookieBlocked = () => {
+      setIsCookieBlocked(true);
+    };
+    window.addEventListener("rivo_cookie_blocked", handleCookieBlocked);
+    return () => {
+      window.removeEventListener("rivo_cookie_blocked", handleCookieBlocked);
+    };
+  }, []);
   
   const [isLogin, setIsLogin] = React.useState(true);
   const [email, setEmail] = React.useState('');
@@ -79,21 +90,44 @@ const AuthView = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-primary/5 via-transparent to-transparent">
+    <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-primary/5 via-transparent to-transparent relative">
+      {isCookieBlocked && (
+        <div className="absolute top-0 left-0 right-0 bg-rose-600 text-white p-3 text-xs font-semibold text-center flex flex-col gap-1 items-center justify-center border-b border-rose-700 animate-pulse z-50">
+          <p>⚠️ Tu navegador bloqueó la cookie de seguridad de AI Studio (común en Safari/iOS).</p>
+          <a 
+            href={window.location.href} 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="underline font-black hover:text-rose-100 flex items-center gap-1"
+          >
+            Hacer clic aquí para abrir la aplicación en una pestaña nueva ↗
+          </a>
+        </div>
+      )}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md space-y-8"
       >
         <div className="text-center space-y-4">
-          <motion.img
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            src="/logo_rivo.svg"
-            alt="Rivo Logo"
-            className="h-20 w-auto mx-auto"
-            referrerPolicy="no-referrer"
-          />
+          <div className="brand-block flex flex-col items-center gap-1.5">
+            <div className="flex items-center gap-2">
+              <motion.img
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                src="/logo_icon.svg"
+                alt="Rivo Logo Icon"
+                className="h-11 w-11 animate-none"
+                referrerPolicy="no-referrer"
+              />
+              <h1 className="text-3xl font-bold text-slate-950 tracking-tight leading-none">
+                Rivo
+              </h1>
+            </div>
+            <p className="text-xs font-semibold text-slate-500">
+              Comparte tu ruta, a tu ritmo
+            </p>
+          </div>
           <div className="flex justify-center gap-1">
             <button 
               onClick={() => setIsLogin(true)}
@@ -183,7 +217,7 @@ const AuthView = () => {
                         )}
                       >
                         <UserCircle size={24} />
-                        <span className="font-bold text-xs">Pasajero</span>
+                        <span className="font-bold text-sm">Pasajero</span>
                       </button>
                       <button
                         type="button"
@@ -196,7 +230,7 @@ const AuthView = () => {
                         )}
                       >
                         <Car size={24} />
-                        <span className="font-bold text-xs">Conductor</span>
+                        <span className="font-bold text-sm">Conductor</span>
                       </button>
                     </div>
                   </div>
@@ -205,7 +239,7 @@ const AuthView = () => {
                     <motion.div 
                       className="space-y-4 pt-2"
                     >
-                      <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Vehículo</div>
+                      <div className="text-sm font-black text-slate-400 uppercase tracking-widest ml-1">Vehículo</div>
                       <div className="grid grid-cols-2 gap-4">
                         <Input
                           label="Placa"
@@ -259,7 +293,7 @@ const AuthView = () => {
             )}
           </Button>
 
-          <div className="flex items-center gap-2 justify-center text-slate-400 text-[10px] uppercase font-bold tracking-tight">
+          <div className="flex items-center gap-2 justify-center text-slate-400 text-xs sm:text-[13px] uppercase font-extrabold tracking-tight">
             <ShieldCheck size={14} className="text-accent" />
             Acceso exclusivo @syc.com.co
           </div>

@@ -5,9 +5,11 @@ export interface UserEntity {
   email: string;
   role: UserRole;
   name?: string;
+  avatar?: string;
   password?: string;
   profileData?: string;
   rating?: string;
+  reviewCount?: number;
   createdAt: Date;
 }
 

@@ -11,8 +11,22 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  app.use(express.json({ limit: "50mb" }));
+  app.use(express.urlencoded({ limit: "50mb", extended: true }));
   app.use(cookieParser());
+
+  // Static uploads serving for uploaded driver documents
+  app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+
+  // Method Override middleware for environments/restricted reverse-proxies that discard native PATCH/DELETE verbs
+  app.use((req, res, next) => {
+    const override = req.headers["x-http-method-override"] || req.query._method;
+    if (req.method === "POST" && override) {
+      req.method = String(override).toUpperCase();
+      console.log(`[MethodOverride] Remapped request method POST to ${req.method} for path ${req.url}`);
+    }
+    next();
+  });
 
   // API Routes
   app.use((req, res, next) => {
@@ -32,9 +46,14 @@ async function startServer() {
   const { authRouter } = await import("./src/server/modules/auth/infrastructure/AuthRouter");
   app.use("/api/auth", authRouter);
 
+  // Vehicles Module
+  const { vehicleRouter } = await import("./src/server/modules/vehicles/infrastructure/VehicleRouter");
+  app.use("/api/vehicles", vehicleRouter);
+
   // Routes Module
   const { routeRouter } = await import("./src/server/modules/routes/infrastructure/RouteRouter");
   app.use("/api/routes", routeRouter);
+  app.use("/api/trips", routeRouter);
 
   // Requests Module
   const { requestRouter } = await import("./src/server/modules/requests/infrastructure/RequestRouter");
@@ -48,16 +67,21 @@ async function startServer() {
   const { reviewRouter } = await import("./src/server/modules/reviews/infrastructure/ReviewRouter");
   app.use("/api/reviews", reviewRouter);
 
-  // Pico y Placa Evaluation Endpoint
+  // Pico y Placa Metropolitan Domain Module
+  const { circulationRouter } = await import("./src/server/modules/circulation/infrastructure/CirculationRouter");
+  app.use("/api/circulation", circulationRouter);
+  app.use("/api/pico-placa", circulationRouter);
+
+  // Backward compatibility endpoint for evaluate
   app.post("/api/pico-placa/evaluate", async (req, res) => {
     try {
-      const { plate, date, city } = req.body;
-      const { CheckCirculationUseCase } = await import("./src/server/application/use-cases/CheckCirculation");
+      const { plate, date } = req.body;
+      const { CheckCirculationUseCase } = await import("./src/server/modules/circulation/application/CheckCirculationUseCase");
       const useCase = new CheckCirculationUseCase();
-      const result = await useCase.execute({ plate, date, city });
+      const result = await useCase.execute({ plate, date });
       res.json(result);
-    } catch (error) {
-      res.status(500).json({ error: "Internal server error" });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message || "Internal server error" });
     }
   });
 
@@ -86,6 +110,15 @@ async function startServer() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
+    
+    // Start the automatic route finalizer daemon
+    import("./src/server/modules/routes/infrastructure/RouteAutoFinalizer")
+      .then(({ initRouteAutoFinalizer }) => {
+        initRouteAutoFinalizer();
+      })
+      .catch((err) => {
+        console.error("[Server] Failed to initialize RouteAutoFinalizer:", err);
+      });
   });
 
   // Global Error Handler
