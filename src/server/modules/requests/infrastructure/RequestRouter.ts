@@ -107,7 +107,7 @@ requestRouter.get("/me", authMiddleware, async (req: AuthRequest, res) => {
     // Lazy load & transition route states
     await RouteLifecycleManager.performJitTransitions();
 
-    // Get requests where user is passenger OR requests for routes where user is driver
+        // Get requests where user is passenger OR requests for routes where user is driver
     const results = await db
       .select({
         id: joinRequests.id,
