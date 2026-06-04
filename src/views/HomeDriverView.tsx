@@ -12,7 +12,10 @@ import {
   MapPin,
   Route as RouteIcon,
   Bell,
-  AlertTriangle
+  AlertTriangle,
+  Bike,
+  FileText,
+  ShieldCheck
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { JoinRequestStatus, RouteStatus } from '../shared/enums';
@@ -20,10 +23,6 @@ import { VehicleService } from '../client/modules/auth/services/VehicleService';
 import { Vehicle } from '../types';
 
 // Imported high-quality custom generated assets matching passenger parity
-const imgPiedecuesta = new URL('../client/modules/auth/services/assets/images/piedecuesta.png', import.meta.url).href;
-const imgFloridablanca = new URL('../client/modules/auth/services/assets/images/santisimo.png', import.meta.url).href;
-const imgGiron = new URL('../client/modules/auth/services/assets/images/giron.png', import.meta.url).href;
-const imgBucaramanga = new URL('../client/modules/auth/services/assets/images/bucaramanga.png', import.meta.url).href;
 const imgCarCardBg = new URL('../assets/images/car_card_bg_1779742005680.png', import.meta.url).href;
 const imgMotoCardBg = new URL('../assets/images/moto_card_bg_1779742720588.png', import.meta.url).href;
 const imgheroDriver = new URL('../assets/images/heroDriver.png', import.meta.url).href;
@@ -47,54 +46,84 @@ export const HomeDriverView: React.FC<HomeDriverViewProps> = ({
   const [userDocs, setUserDocs] = React.useState<any[]>([]);
   const [loadingData, setLoadingData] = React.useState(true);
 
+  // Load vehicles and driver documents
+  const loadDriverData = async () => {
+    try {
+      const [vehiclesList, userDocsList] = await Promise.all([
+        VehicleService.getVehicles(),
+        VehicleService.getUserDocuments()
+      ]);
+      setVehicles(vehiclesList);
+      setUserDocs(userDocsList);
+    } catch (err) {
+      console.error("Error loading vehicles and user docs in HomeDriverView:", err);
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
   React.useEffect(() => {
-    let active = true;
-    const loadData = async () => {
-      try {
-        const [vehiclesList, userDocsList] = await Promise.all([
-          VehicleService.getVehicles(),
-          VehicleService.getUserDocuments()
-        ]);
-        if (active) {
-          setVehicles(vehiclesList);
-          setUserDocs(userDocsList);
-        }
-      } catch (err) {
-        console.error("Error loading vehicles and user docs in HomeDriverView:", err);
-      } finally {
-        if (active) {
-          setLoadingData(false);
-        }
-      }
-    };
-    loadData();
-    return () => { active = false; };
+    loadDriverData();
   }, []);
 
+  const handleActivateVehicle = async (id: string) => {
+    try {
+      setLoadingData(true);
+      await VehicleService.activateVehicle(id);
+      await loadDriverData();
+    } catch (err) {
+      console.error("Error activating vehicle in HomeDriverView:", err);
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
   const activeVehicle = vehicles.find((v: any) => v.isActive);
+  const otherVehicles = vehicles.filter((v: any) => !v.isActive);
+
   const soatDocument = activeVehicle?.documents?.find((d: any) => d.documentType === 'soat');
-  
-  const isSoatExpired = React.useMemo(() => {
-    if (!soatDocument || !soatDocument.expirationDate) return false;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const expDate = new Date(soatDocument.expirationDate);
-    return expDate < today;
-  }, [soatDocument]);
-
-  const hasApprovedSoat = soatDocument && soatDocument.status?.toLowerCase() === 'approved' && !isSoatExpired;
-
+  const propertyCardDocument = activeVehicle?.documents?.find((d: any) => d.documentType === 'property_card');
+  const techDocument = activeVehicle?.documents?.find((d: any) => d.documentType === 'tech_preventive');
   const licenseDocument = userDocs.find((d: any) => d.documentType === 'license');
   
-  const isLicenseExpired = React.useMemo(() => {
-    if (!licenseDocument || !licenseDocument.expirationDate) return false;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const expDate = new Date(licenseDocument.expirationDate);
-    return expDate < today;
-  }, [licenseDocument]);
+  const getDocStatus = (doc: any) => {
+    if (!doc) return "missing";
+    const status = (doc.status || "pending").toLowerCase();
+    
+    if (doc.expirationDate) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const expDate = new Date(doc.expirationDate);
+      if (expDate < today) {
+        return "expired";
+      }
+    }
+    return status;
+  };
 
-  const hasApprovedLicense = licenseDocument && licenseDocument.status?.toLowerCase() === 'approved' && !isLicenseExpired;
+  const soatState = getDocStatus(soatDocument);
+  const propCardState = getDocStatus(propertyCardDocument);
+  const techState = getDocStatus(techDocument);
+  const licenseState = getDocStatus(licenseDocument);
+
+  // Symmetrical verification logic matching security requirements
+  const hasApprovedSoat = soatState === 'approved';
+  const hasApprovedLicense = licenseState === 'approved';
+
+  // Overall account eligibility status (Verde, Amarillo, Rojo)
+  const overallState: 'green' | 'yellow' | 'red' = React.useMemo(() => {
+    if (vehicles.length === 0) return 'red';
+    if (!activeVehicle) return 'red';
+    
+    const allStates = [soatState, propCardState, techState, licenseState];
+    if (allStates.includes('expired') || allStates.includes('rejected') || allStates.includes('missing')) {
+      return 'red';
+    }
+    if (allStates.includes('pending')) {
+      return 'yellow';
+    }
+    return 'green';
+  }, [vehicles, activeVehicle, soatState, propCardState, techState, licenseState]);
 
   // Analytical metrics for the driver
   const myRoutesAsDriver = routes.filter((r: any) => String(r.driverId) === String(user.id));
@@ -113,6 +142,47 @@ export const HomeDriverView: React.FC<HomeDriverViewProps> = ({
     String(r.driverId) === String(user.id) && 
     [RouteStatus.SCHEDULED, RouteStatus.IN_PROGRESS].includes(r.status.toLowerCase() as RouteStatus)
   );
+
+  // Helper styles for compact documents rendering
+  const getCompactBadge = (status: string) => {
+    switch (status) {
+      case 'approved':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200/50 text-[10px] font-black uppercase tracking-wider">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            Aprobado
+          </span>
+        );
+      case 'pending':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200/50 text-[10px] font-black uppercase tracking-wider">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+            Revisión
+          </span>
+        );
+      case 'expired':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200/50 text-[10px] font-black uppercase tracking-wider">
+            <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+            Vencido
+          </span>
+        );
+      case 'rejected':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200/50 text-[10px] font-black uppercase tracking-wider">
+            <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+            Rechazado
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-50 text-slate-500 border border-slate-200/50 text-[10px] font-black uppercase tracking-wider">
+            <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+            Sin Cargar
+          </span>
+        );
+    }
+  };
 
   return (
     <div className="max-w-[480px] mx-auto w-full space-y-6 relative pb-24 text-left bg-transparent min-h-screen px-4 pt-1.5">
@@ -219,7 +289,7 @@ export const HomeDriverView: React.FC<HomeDriverViewProps> = ({
               </p>
               <p className="text-xs opacity-80 font-semibold leading-normal mt-0.5 truncate">
                 {picoPlaca.canCirculate 
-                  ? `Matrícula ${user.vehicle?.plate || '—'} sin restricción activa.`
+                  ? `Matrícula ${activeVehicle?.plate || '—'} sin restricción activa.`
                   : "Por favor evita publicar rutas programadas si no puedes circular."}
               </p>
             </div>
@@ -233,87 +303,106 @@ export const HomeDriverView: React.FC<HomeDriverViewProps> = ({
         </motion.div>
       )}
 
-      {/* [LICENSE WARNING BANNER] - Premium amber or red layout depending on expiration */}
-      {!loadingData && !hasApprovedLicense && (
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className={cn(
-            "p-4 rounded-3xl border text-left flex items-center justify-between gap-3 shadow-xs transition-all mb-4",
-            isLicenseExpired 
-              ? "bg-rose-50/90 border-rose-200 text-rose-950" 
-              : "bg-amber-50/90 border-amber-200 text-amber-950"
-          )}
-        >
-          <div className="flex items-center gap-2.5 min-w-0">
-            <span className="text-base shrink-0 select-none">
-              🪪
+      {/* 3. COCKPIT OPERATIVO POR SEMÁFORO (Estilo Uber Driver) */}
+      <section className="space-y-4">
+        {/* Semáforo de Operación de la Cuenta */}
+        <div className={cn(
+          "p-4 rounded-3xl border transition-all duration-300",
+          overallState === 'green' 
+            ? "bg-emerald-50/70 border-emerald-250/50 text-slate-900" 
+            : overallState === 'yellow'
+              ? "bg-amber-50/70 border-amber-250/50 text-slate-900"
+              : "bg-rose-50/70 border-rose-250/50 text-slate-900"
+        )}>
+          <div className="flex items-center gap-3">
+            <span className="relative flex h-3.5 w-3.5 shrink-0">
+              <span className={cn(
+                "animate-ping absolute inline-flex h-full w-full rounded-full opacity-75",
+                overallState === 'green' ? "bg-emerald-400" : overallState === 'yellow' ? "bg-amber-400" : "bg-rose-400"
+              )} />
+              <span className={cn(
+                "relative inline-flex rounded-full h-3.5 w-3.5",
+                overallState === 'green' ? "bg-emerald-500" : overallState === 'yellow' ? "bg-amber-500" : "bg-rose-500"
+              )} />
             </span>
             <div className="min-w-0">
-              <p className="font-extrabold text-sm leading-tight text-slate-950">
-                {isLicenseExpired ? "Licencia Vencida" : "Licencia Requerida"}
+              <p className="font-extrabold text-sm leading-tight text-slate-900">
+                {overallState === 'green' ? "🟢 Todo listo para conducir" : 
+                 overallState === 'yellow' ? "🟡 Validación pendiente" : "🔴 Acción requerida"}
               </p>
-              <p className={cn(
-                "text-xs font-semibold leading-normal mt-0.5 whitespace-normal",
-                isLicenseExpired ? "text-rose-800" : "text-amber-800"
-              )}>
-                {isLicenseExpired 
-                  ? "Tu licencia de conducción está vencida. Actualízala para continuar publicando."
-                  : "Debes cargar tu licencia de conducción para comenzar a publicar rutas."}
+              <p className="text-xs text-slate-550 font-bold leading-normal mt-0.5 text-slate-500">
+                {overallState === 'green' ? "Tu cuenta está activa de manera permanente. ¡Buen viaje!" : 
+                 overallState === 'yellow' ? "Estamos verificando internamente tus soportes cargados." : "Actualiza tus soportes vencidos o pendientes para recibir pasajeros."}
               </p>
             </div>
           </div>
-          <button 
-            onClick={() => navigate('/profile')} 
-            className="text-[11px] font-black uppercase tracking-wider px-3.5 py-2.5 rounded-xl shrink-0 transition-all active:scale-[0.98] text-white shadow-sm hover:shadow-md"
-            style={{ backgroundColor: isLicenseExpired ? '#DC2626' : '#D97706' }}
-          >
-            Ir a Mi Garaje
-          </button>
-        </motion.div>
-      )}
+        </div>
 
-      {/* [SOAT WARNING BANNER] - Premium amber or red layout depending on expiration */}
-      {!loadingData && !hasApprovedSoat && (
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className={cn(
-            "p-4 rounded-3xl border text-left flex items-center justify-between gap-3 shadow-xs transition-all",
-            isSoatExpired 
-              ? "bg-rose-50/90 border-rose-200 text-rose-950" 
-              : "bg-amber-50/90 border-amber-200 text-amber-950"
-          )}
-        >
-          <div className="flex items-center gap-2.5 min-w-0">
-            <span className="text-base shrink-0 select-none">
-              ⚠️
-            </span>
-            <div className="min-w-0">
-              <p className="font-extrabold text-sm leading-tight text-slate-950">
-                {isSoatExpired ? "SOAT Vencido" : "SOAT Requerido"}
-              </p>
-              <p className={cn(
-                "text-xs font-semibold leading-normal mt-0.5 whitespace-normal",
-                isSoatExpired ? "text-rose-800" : "text-amber-800"
-              )}>
-                {isSoatExpired 
-                  ? "Tu SOAT venció. Actualízalo para continuar publicando."
-                  : "⚠ Completa la verificación del SOAT para comenzar a publicar rutas."}
-              </p>
+        {/* Tarjeta de Vehículo Activo Compacta (Estilo Uber Driver - 100% full-width highlighted segment) */}
+        {!loadingData && !activeVehicle ? (
+          <div className="p-6 text-center bg-white border border-dashed border-slate-200 rounded-[28px] space-y-4 shadow-sm">
+            <Car className="w-10 h-10 text-slate-300 mx-auto" />
+            <p className="font-extrabold text-sm text-slate-700">No tienes vehículo principal configurado</p>
+            <button 
+              onClick={() => navigate('/profile')} 
+              className="px-4 py-2 bg-primary text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-xs cursor-pointer"
+            >
+              Configurar vehículo principal
+            </button>
+          </div>
+        ) : (
+          <div className="bg-white border border-slate-105 p-5 rounded-[26px] shadow-sm relative overflow-hidden flex flex-col gap-4 border-slate-150">
+            {/* Header / Subdued watermark */}
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                Vehículo Activo
+              </span>
+              <span className="px-2 py-0.5 bg-primary/10 text-primary border border-primary/20 text-[9px] font-black uppercase tracking-wider rounded-md">
+                Principal
+              </span>
+            </div>
+
+            {/* Premium Compact details (No individual tables, no expiration sheets) */}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-xl bg-slate-50 border border-slate-100 text-slate-600 flex items-center justify-center shrink-0">
+                  {activeVehicle?.type === "motorcycle" ? <Bike size={20} /> : <Car size={20} />}
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-slate-800 text-[15px] leading-tight">
+                    {activeVehicle?.brand}
+                  </h4>
+                  <p className="text-xs text-slate-400 font-bold mt-0.5">
+                    Modelo {activeVehicle?.model || "—"} • {activeVehicle?.color}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-col items-end gap-1 shrink-0">
+                <span className="bg-amber-400 text-slate-900 border border-slate-200 px-2 py-0.5 rounded font-mono font-black text-xs tracking-widest uppercase shadow-2xs">
+                  {activeVehicle?.plate}
+                </span>
+                <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">
+                  {overallState === 'green' ? '✓ Documentos al día' : '⚠ Revisar soportes'}
+                </span>
+              </div>
+            </div>
+
+            {/* Immediate Uber-Driver standard Mi Garaje button */}
+            <div className="pt-1.5 border-t border-slate-50">
+              <button 
+                onClick={() => navigate('/profile')}
+                className="w-full py-2.5 px-4 bg-slate-50 hover:bg-indigo-50/80 hover:text-indigo-700 hover:border-indigo-300/50 hover:scale-[1.015] border border-slate-200/50 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all duration-300 ease-out text-slate-600 active:scale-[0.98] shadow-2xs hover:shadow-xs cursor-pointer group"
+              >
+                <Car size={13} className="text-slate-400 group-hover:text-indigo-600 group-hover:scale-110 transition-all duration-300 ease-out" />
+                Ver Mi Garaje
+              </button>
             </div>
           </div>
-          <button 
-            onClick={() => navigate('/profile')} 
-            className="text-[11px] font-black uppercase tracking-wider px-3.5 py-2.5 rounded-xl shrink-0 transition-all active:scale-[0.98] text-white shadow-sm hover:shadow-md"
-            style={{ backgroundColor: isSoatExpired ? '#DC2626' : '#D97706' }}
-          >
-            Ir a Mi Garaje
-          </button>
-        </motion.div>
-      )}
+        )}
+      </section>
 
-      {/* 3. Hero Grande Dominante */}
+      {/* 4. Hero Grande Dominante */}
       <section>
         <motion.div 
           initial={{ opacity: 0, scale: 0.98 }} 
@@ -448,77 +537,7 @@ export const HomeDriverView: React.FC<HomeDriverViewProps> = ({
         </div>
       </section>
 
-      {/* 5. SECCIÓN "PUNTOS COMUNES DE RUTA" (Symmetrical destinations mapping to form query) */}
-      <section className="space-y-3 pt-1">
-        <h3 className="text-lg font-extrabold text-slate-900 tracking-tight">
-          Destinos frecuentes
-        </h3>
-        <div className="grid grid-cols-1 min-[350px]:grid-cols-2 gap-3">
-          {/* Piedecuesta */}
-          <div 
-            onClick={() => navigate('/create?destination=Piedecuesta')}
-            className="bg-white rounded-[24px] border border-slate-100 overflow-hidden shadow-sm hover:border-slate-200 cursor-pointer active:scale-95 transition-all text-center pb-3 flex flex-col justify-between"
-          >
-            <div className="h-24 sm:h-28 overflow-hidden bg-slate-50">
-              <img 
-                src={imgPiedecuesta} 
-                alt="Piedecuesta" 
-                className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
-                referrerPolicy="no-referrer"
-              />
-            </div>
-            <p className="text-base font-extrabold text-slate-800 mt-2">Piedecuesta</p>
-          </div>
 
-          {/* Floridablanca */}
-          <div 
-            onClick={() => navigate('/create?destination=Floridablanca')}
-            className="bg-white rounded-[24px] border border-slate-100 overflow-hidden shadow-sm hover:border-slate-200 cursor-pointer active:scale-95 transition-all text-center pb-3 flex flex-col justify-between"
-          >
-            <div className="h-24 sm:h-28 overflow-hidden bg-slate-50">
-              <img 
-                src={imgFloridablanca} 
-                alt="Floridablanca" 
-                className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
-                referrerPolicy="no-referrer"
-              />
-            </div>
-            <p className="text-base font-extrabold text-slate-800 mt-2">Floridablanca</p>
-          </div>
-
-          {/* Girón */}
-          <div 
-            onClick={() => navigate('/create?destination=Giron')}
-            className="bg-white rounded-[24px] border border-slate-100 overflow-hidden shadow-sm hover:border-slate-200 cursor-pointer active:scale-95 transition-all text-center pb-3 flex flex-col justify-between"
-          >
-            <div className="h-24 sm:h-28 overflow-hidden bg-slate-50">
-              <img 
-                src={imgGiron} 
-                alt="Girón" 
-                className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
-                referrerPolicy="no-referrer"
-              />
-            </div>
-            <p className="text-base font-extrabold text-slate-800 mt-2">Girón</p>
-          </div>
-
-          {/* Bucaramanga */}
-          <div 
-            onClick={() => navigate('/create?destination=Bucaramanga')}
-            className="bg-white rounded-[24px] border border-slate-100 overflow-hidden shadow-sm hover:border-slate-200 cursor-pointer active:scale-95 transition-all text-center pb-3 flex flex-col justify-between"
-          >
-            <div className="h-24 sm:h-28 overflow-hidden bg-slate-50">
-              <img 
-                src={imgBucaramanga} 
-                alt="Bucaramanga" 
-                className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
-                referrerPolicy="no-referrer"
-              />
-            </div>
-            <p className="text-base font-extrabold text-slate-800 mt-2">Bucaramanga</p>
-          </div>
-        </div>
-      </section>
 
       {/* 6. Mis rutas activas (list matching Passenger UI details) */}
       <section className="space-y-3.5 pt-1">
@@ -597,6 +616,8 @@ export const HomeDriverView: React.FC<HomeDriverViewProps> = ({
           </div>
         )}
       </section>
+
+
     </div>
   );
 };

@@ -407,7 +407,7 @@ export default function MyGarage() {
               </Button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-4.5 w-full">
               {vehicles.map((v) => {
                 const isSelected = selectedVehicleId === v.id;
                 return (
@@ -415,65 +415,81 @@ export default function MyGarage() {
                     key={v.id} 
                     id={`vehicle_card_${v.id}`}
                     onClick={() => setSelectedVehicleId(v.id)}
-                    className={`card-rivo p-5 cursor-pointer border-2 transition-all relative overflow-hidden ${
+                    className={`p-6 cursor-pointer border-2 transition-all duration-300 rounded-[28px] relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-5 ${
                       isSelected 
-                        ? "border-primary bg-indigo-50/10 shadow-md shadow-primary/5" 
-                        : "border-slate-150 hover:border-slate-300 bg-white"
+                        ? "border-primary bg-gradient-to-br from-indigo-50/20 to-white shadow-xl shadow-indigo-100/30" 
+                        : "border-slate-100 hover:border-slate-200 bg-white shadow-sm hover:shadow"
                     }`}
                   >
-                    <div className="flex items-start justify-between">
-                      <div className="flex gap-4">
-                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
-                          v.isActive ? "bg-primary text-white" : "bg-slate-100 text-slate-500"
-                        }`}>
-                          {v.type === "motorcycle" ? <Bike size={22} /> : <Car size={22} />}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="px-2 py-0.5 bg-slate-900 text-white rounded-lg font-mono text-xs tracking-widest font-black uppercase">
-                              {v.plate}
-                            </span>
-                            {v.isActive && (
-                              <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-full font-black text-[10px] uppercase tracking-wider">
-                                Principal
-                              </span>
-                            )}
-                          </div>
-                          <p className="font-black text-slate-900 mt-1.5 leading-tight">{v.brand}</p>
-                          <p className="text-xs text-slate-500 mt-0.5">
-                            {v.model || "Sin modelo"} • {v.color}
-                          </p>
-                        </div>
+                    {/* Visual left glowing strip for the active vehicle */}
+                    {v.isActive && (
+                      <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-emerald-500 rounded-r" />
+                    )}
+
+                    <div className="flex items-center gap-5 flex-1 min-w-0">
+                      {/* Circle Vehicle Icon */}
+                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 transition-colors duration-300 ${
+                        v.isActive 
+                          ? "bg-primary text-white shadow-lg shadow-primary/25" 
+                          : "bg-slate-50 text-slate-400 group-hover:bg-slate-100"
+                      }`}>
+                        {v.type === "motorcycle" ? <Bike size={26} /> : <Car size={26} />}
                       </div>
 
-                      {/* Right corner quick buttons */}
-                      <div className="flex flex-col items-end gap-2" onClick={(e) => e.stopPropagation()}>
-                        {!v.isActive && (
-                          <button
-                            id={`btn_activate_${v.id}`}
-                            onClick={() => handleActivateVehicle(v.id)}
-                            className="px-2 py-1 text-[10px] font-black uppercase tracking-wider bg-primary/10 hover:bg-primary/20 text-primary rounded-xl transition-colors"
-                          >
-                            Hacer principal
-                          </button>
-                        )}
+                      <div className="space-y-1.5 flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="px-3 py-1 bg-slate-900 text-white rounded-lg font-mono text-xs tracking-widest font-black uppercase shadow-xs border border-slate-950">
+                            {v.plate}
+                          </span>
+                          {v.isActive && (
+                            <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full font-black text-[10px] uppercase tracking-wider flex items-center gap-1 shadow-2xs">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                              Principal Activo
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="font-extrabold text-slate-900 text-lg leading-tight truncate">
+                          {v.brand}
+                        </p>
+                        
+                        <p className="text-xs text-slate-500 font-bold flex items-center gap-2">
+                          <span>Modelo: {v.model || "Sin especificar"}</span>
+                          <span className="text-slate-300">•</span>
+                          <span className="flex items-center gap-1">
+                            Color: <span className="inline-block w-2.5 h-2.5 rounded-full border border-slate-200" style={{ backgroundColor: v.color?.toLowerCase() === 'blanco' ? '#fff' : v.color?.toLowerCase() === 'negro' ? '#000' : v.color?.toLowerCase() === 'rojo' ? '#ef4444' : v.color?.toLowerCase() === 'azul' ? '#3b82f6' : '#94a3b8' }} /> {v.color}
+                          </span>
+                        </p>
                       </div>
                     </div>
 
-                    {/* Bottom Status Stripe */}
-                    <div className="mt-4 pt-3 border-t border-slate-50 flex items-center justify-between text-xs">
-                      <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">
-                        {v.type === "motorcycle" ? "Motocicleta" : "Automóvil"}
-                      </span>
-                      <div className="flex items-center gap-1.5">
-                        <span className={`w-2 h-2 rounded-full ${
-                          v.verifiedStatus === "approved" ? "bg-emerald-500" :
-                          v.verifiedStatus === "pending" ? "bg-amber-500" : "bg-red-500"
+                    {/* Right Block: Status Indicator & Quick Active Button */}
+                    <div className="flex flex-row md:flex-col items-center md:items-end justify-between md:justify-center gap-4 pt-3 md:pt-0 border-t md:border-t-0 border-slate-50">
+                      <div className="flex items-center gap-2">
+                        <span className={`w-2.5 h-2.5 rounded-full ${
+                          v.verifiedStatus === "approved" ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]" :
+                          v.verifiedStatus === "pending" ? "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.4)] animate-pulse" : "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]"
                         }`} />
-                        <span className="font-bold text-slate-600 capitalize">
+                        <span className="font-extrabold text-xs text-slate-700 uppercase tracking-wider">
                           {v.verifiedStatus === "approved" ? "Aprobado" :
-                           v.verifiedStatus === "pending" ? "Pendiente" : "Rechazado"}
+                           v.verifiedStatus === "pending" ? "En Revisión" : "Verificaciones"}
                         </span>
+                      </div>
+
+                      <div onClick={(e) => e.stopPropagation()}>
+                        {!v.isActive ? (
+                          <button
+                            id={`btn_activate_${v.id}`}
+                            onClick={() => handleActivateVehicle(v.id)}
+                            className="px-4 py-2 text-xs font-black uppercase tracking-wider bg-primary/10 hover:bg-primary hover:text-white text-primary rounded-xl transition-all duration-200 active:scale-95 text-center shadow-2xs cursor-pointer"
+                          >
+                            Activar como principal
+                          </button>
+                        ) : (
+                          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                            Preestablecido
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -509,7 +525,7 @@ export default function MyGarage() {
               {/* Required vehicle document grid */}
               <div className="space-y-4">
                 <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Documentación del vehículo</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-4 w-full">
                   {requiredVehicleDocs.map((reqDoc) => {
                     const document = (vehicleDetails as any).documents?.find(
                       (d: any) => d.documentType === reqDoc.type
@@ -519,52 +535,52 @@ export default function MyGarage() {
                       <div 
                         key={reqDoc.type} 
                         id={`doc_block_${reqDoc.type}`}
-                        className="bg-white border border-slate-150 p-5 rounded-3xl flex flex-col justify-between space-y-4 relative hover:border-slate-200 transition-all shadow-sm"
+                        className="bg-white border border-slate-100 p-6 rounded-[24px] flex flex-col md:flex-row md:items-center justify-between gap-5 relative hover:border-slate-200 hover:shadow-xs transition-all"
                       >
-                        <div className="space-y-1.5">
-                          <div className="flex items-center gap-2">
-                            <span className="p-2 bg-indigo-50 text-indigo-700 rounded-xl">
-                              <FileText size={16} />
+                        <div className="space-y-2 flex-1 min-w-0">
+                          <div className="flex items-center gap-3">
+                            <span className="p-2.5 bg-indigo-50/70 text-indigo-700 rounded-xl shrink-0">
+                              <FileText size={18} />
                             </span>
-                            <span className="font-extrabold text-sm text-slate-800 leading-none">
+                            <span className="font-extrabold text-base text-slate-900">
                               {reqDoc.label}
                             </span>
                           </div>
-                          <p className="text-[11px] text-slate-500 leading-normal pt-1">
+                          <p className="text-xs text-slate-500 leading-relaxed max-w-xl">
                             {reqDoc.desc}
                           </p>
                         </div>
 
-                        <div className="space-y-3 pt-2">
-                          <div className="flex flex-col gap-1">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 shrink-0 border-t md:border-t-0 border-slate-100/60 pt-3 md:pt-0">
+                          <div className="flex flex-col gap-1.5 md:items-end">
                             {getStatusBadge(document?.status, reqDoc.type, document?.rejectReason, document?.expirationDate)}
+                            
+                            {document && document.expirationDate && (
+                              <div className="flex items-center gap-1 text-[11px] text-slate-400 font-extrabold">
+                                <Calendar size={13} />
+                                Vence {new Date(document.expirationDate).toISOString().split("T")[0]}
+                              </div>
+                            )}
                           </div>
-                          
-                          {document && document.expirationDate && (
-                            <div className="flex items-center gap-1 text-[11px] text-slate-400 font-bold">
-                              <Calendar size={13} />
-                              Vence {new Date(document.expirationDate).toISOString().split("T")[0]}
-                            </div>
-                          )}
 
-                          <div className="flex gap-2 pt-1">
+                          <div className="flex gap-2 shrink-0 w-full sm:w-auto">
                             {document?.fileUrl && (
                               <a 
                                 href={document.fileUrl} 
                                 target="_blank" 
                                 referrerPolicy="no-referrer"
-                                className="px-2.5 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-black text-slate-600 flex items-center gap-1 flex-1 justify-center"
+                                className="px-3.5 py-2.5 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-black text-slate-600 flex items-center gap-1.5 justify-center transition-colors min-w-[80px] flex-1 sm:flex-initial"
                               >
-                                <ExternalLink size={12} />
+                                <ExternalLink size={13} />
                                 Copia
                               </a>
                             )}
                             <Button
                               id={`btn_upload_${reqDoc.type}`}
                               variant={document ? "ghost" : "primary"}
-                              size="xs"
+                              size="sm"
                               onClick={() => openUploadModalFor(vehicleDetails.id, reqDoc.type, reqDoc.label)}
-                              className={`rounded-xl py-2 flex-1 text-[11px] font-black uppercase tracking-wider ${
+                              className={`rounded-xl py-2.5 px-4 text-xs font-black uppercase tracking-wider min-w-[100px] flex-1 sm:flex-initial ${
                                 document ? "text-primary hover:bg-indigo-50/40" : ""
                               }`}
                             >

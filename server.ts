@@ -7,6 +7,18 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Bind safe handlers to stdout/stderr stream errors to ignore 'EPIPE' crash triggers
+process.stdout.on("error", (err: any) => {
+  if (err.code === "EPIPE") {
+    // Gracefully digest the disconnected stdout pipe without crashing
+  }
+});
+process.stderr.on("error", (err: any) => {
+  if (err.code === "EPIPE") {
+    // Gracefully digest the disconnected stderr pipe without crashing
+  }
+});
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -127,6 +139,14 @@ async function startServer() {
     res.status(500).json({ error: "Internal Server Error", message: err.message });
   });
 }
+
+process.on("uncaughtException", (error) => {
+  console.error("[Process] CRITICAL: Uncaught Exception caught to prevent crash:", error);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("[Process] CRITICAL: Unhandled Rejection caught to prevent crash:", reason);
+});
 
 startServer().catch((err) => {
   console.error("Failed to start server:", err);
