@@ -101,6 +101,7 @@ export default function MyGarage() {
   // Handle adding a new vehicle
   const handleAddVehicle = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!newVehicle.plate || !newVehicle.brand || !newVehicle.color) {
       showToast("La placa, marca y color son campos obligatorios", "error");
       return;
@@ -237,6 +238,7 @@ export default function MyGarage() {
   // Handle document upload submit
   const handleUploadDocument = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!uploadTarget) return;
 
     if (!fileUrl) {

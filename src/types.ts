@@ -85,7 +85,6 @@ export interface User {
   avatar?: string;
   rating?: string | number | null;
   reviewCount?: number;
-  isAvailable?: boolean;
   vehicle?: Vehicle | null; // Keeps retrocompatibility
 }
 

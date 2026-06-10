@@ -6,7 +6,10 @@ import ExploreView from './views/ExploreView';
 import CreateRouteView from './views/CreateRouteView';
 import RequestsView from './views/RequestsView';
 import ProfileView from './views/ProfileView';
+import PrivacyView from './views/PrivacyView';
+import HelpView from './views/HelpView';
 import AdminView from './views/AdminView';
+import AdminAnalyticsView from './views/AdminAnalyticsView';
 import RouteDetailView from './views/RouteDetailView';
 import NotificationsView from './views/NotificationsView';
 import MainLayout from './components/layout/MainLayout';
@@ -50,11 +53,27 @@ function AppContent() {
             <Route path="notifications" element={<NotificationsView />} />
             <Route path="route/:id" element={<RouteDetailView />} />
             <Route path="profile" element={<ProfileView />} />
+            <Route path="profile/privacy" element={<PrivacyView />} />
+            <Route path="profile/help" element={<HelpView />} />
             <Route 
               path="admin" 
               element={
+                <Navigate to="/admin/operation" replace />
+              } 
+            />
+            <Route 
+              path="admin/operation" 
+              element={
                 <ProtectedRoute allowedRoles={['admin']}>
                   <AdminView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="admin/analytics" 
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminAnalyticsView />
                 </ProtectedRoute>
               } 
             />

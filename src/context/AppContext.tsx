@@ -18,6 +18,7 @@ interface AppContextType {
   updateRouteStatus: (id: string, status: string) => Promise<void>;
   getRoutePassengers: (id: string) => Promise<any[]>;
   submitReview: (data: { routeId: string, toUserId: string, score: number, comment?: string }) => Promise<void>;
+  getMyReviewsForRoute: (routeId: string) => Promise<{ ratedUserIds: number[] }>;
   markNotificationAsRead: (id: string) => Promise<void>;
   markAllNotificationsAsRead: () => Promise<void>;
 }
@@ -375,6 +376,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const getMyReviewsForRoute = async (routeId: string) => {
+    try {
+      const response = await SecureHttpClient.request(`/api/reviews/route/${routeId}/my-reviews`);
+      if (response.ok) {
+        return await response.json();
+      }
+      return { ratedUserIds: [] };
+    } catch (error) {
+      console.error('Error fetching my reviews for route:', error);
+      return { ratedUserIds: [] };
+    }
+  };
+
   const markNotificationAsRead = async (id: string) => {
     try {
       const success = await NotificationService.markAsRead(id);
@@ -401,7 +415,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     <AppContext.Provider value={{
       user, routes, requests, notifications, isLoading: isAuthLoading || isLoading,
       createRoute, requestJoin, updateRequestStatus, cancelJoinRequest,
-      updateRouteStatus, getRoutePassengers, submitReview,
+      updateRouteStatus, getRoutePassengers, submitReview, getMyReviewsForRoute,
       markNotificationAsRead, markAllNotificationsAsRead
     }}>
       {children}

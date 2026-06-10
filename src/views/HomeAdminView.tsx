@@ -139,85 +139,67 @@ export const HomeAdminView: React.FC<HomeAdminViewProps> = ({
         </motion.div>
       </section>
 
-      {/* 4. Quick Actions (four grid cards: Usuarios, Viajes, Reportes, Moderación - PRÓXIMAMENTE) */}
-      <section className="space-y-3 px-0.5">
-        <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest">Accesos rápidos</h4>
-        <div className="grid grid-cols-2 gap-3.5">
-          {/* Card 1: Usuarios */}
-          <div 
-            onClick={() => navigate('/admin')}
-            className="bg-white p-4.5 rounded-[22px] border border-slate-100 hover:border-slate-200 transition-all cursor-pointer shadow-xs flex flex-col justify-between min-h-[135px] group text-left relative overflow-hidden"
+      {/* 4. Quick Actions (Operación & Analítica CTA, completely decoupled) */}
+      <section className="space-y-3.5 px-0.5">
+        <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">Accesos Rápidos Especializados</h4>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Card 1: Operación */}
+          <motion.div 
+            onClick={() => navigate('/admin/operation')}
+            whileHover={{ y: -4, scale: 1.01 }}
+            whileTap={{ scale: 0.98 }}
+            className="bg-white p-5 rounded-[28px] border border-slate-100/90 hover:border-slate-200 hover:shadow-md transition-all cursor-pointer shadow-xs flex flex-col justify-between min-h-[145px] text-left relative overflow-hidden"
           >
-            <div>
-              <div className="flex items-center justify-between gap-1 flex-wrap">
-                <div className="w-8 h-8 rounded-lg bg-violet-50 text-violet-500 flex items-center justify-center shrink-0">
-                  <Users size={16} strokeWidth={2.5} />
+            <div className="absolute top-[-20px] right-[-20px] w-24 h-24 bg-violet-50/40 rounded-full blur-xl pointer-events-none" />
+            <div className="space-y-3 relative z-10">
+              <div className="flex items-center justify-between">
+                <div className="w-10 h-10 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center shrink-0 border border-violet-100/50">
+                  <Activity size={18} strokeWidth={2.5} />
                 </div>
-                <span className="text-[11.5px] font-black text-violet-600 bg-violet-100/60 uppercase tracking-wider px-2 py-1 rounded-full shrink-0">Próximamente</span>
+                <span className="text-[10px] font-black text-violet-700 bg-violet-50/70 uppercase tracking-wider px-2.5 py-1 rounded-full border border-violet-100/30">
+                  Supervisión Activa
+                </span>
               </div>
-              <h5 className="font-extrabold text-slate-900 text-sm sm:text-base mt-2.5">Usuarios</h5>
-              <p className="text-xs sm:text-[13px] font-semibold mt-1 leading-relaxed text-slate-450">
-                Gestionar roles y estado
-              </p>
+              <div>
+                <h5 className="font-extrabold text-slate-900 text-base flex items-center gap-1.5">
+                  Operación de Plataforma
+                  <ChevronRight size={16} className="text-slate-400" />
+                </h5>
+                <p className="text-xs sm:text-[13px] font-semibold mt-1 leading-relaxed text-slate-500">
+                  Monitoreo de rutas, aprobación de licencias, SOAT y perfiles de conductores SyC.
+                </p>
+              </div>
             </div>
-          </div>
+          </motion.div>
 
-          {/* Card 2: Viajes */}
-          <div 
-            onClick={() => navigate('/admin')}
-            className="bg-white p-4.5 rounded-[22px] border border-slate-100 hover:border-slate-200 transition-all cursor-pointer shadow-xs flex flex-col justify-between min-h-[135px] group text-left relative overflow-hidden"
+          {/* Card 2: Analítica */}
+          <motion.div 
+            onClick={() => navigate('/admin/analytics')}
+            whileHover={{ y: -4, scale: 1.01 }}
+            whileTap={{ scale: 0.98 }}
+            className="bg-white p-5 rounded-[28px] border border-slate-100/90 hover:border-slate-200 hover:shadow-md transition-all cursor-pointer shadow-xs flex flex-col justify-between min-h-[145px] text-left relative overflow-hidden"
           >
-            <div>
-              <div className="flex items-center justify-between gap-1 flex-wrap">
-                <div className="w-8 h-8 rounded-lg bg-violet-50 text-violet-500 flex items-center justify-center shrink-0">
-                  <Car size={16} strokeWidth={2.5} />
+            <div className="absolute top-[-20px] right-[-20px] w-24 h-24 bg-indigo-50/40 rounded-full blur-xl pointer-events-none" />
+            <div className="space-y-3 relative z-10">
+              <div className="flex items-center justify-between">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100/50">
+                  <BarChart2 size={18} strokeWidth={2.5} />
                 </div>
-                <span className="text-[11.5px] font-black text-violet-600 bg-violet-100/60 uppercase tracking-wider px-2 py-1 rounded-full shrink-0">Próximamente</span>
+                <span className="text-[10px] font-black text-indigo-700 bg-indigo-50/70 uppercase tracking-wider px-2.5 py-1 rounded-full border border-indigo-100/30">
+                  KPIs & Reportes
+                </span>
               </div>
-              <h5 className="font-extrabold text-slate-900 text-sm sm:text-base mt-2.5">Viajes</h5>
-              <p className="text-xs sm:text-[13px] font-semibold mt-1 leading-relaxed text-slate-450">
-                Monitorear rutas activas
-              </p>
-            </div>
-          </div>
-
-          {/* Card 3: Reportes */}
-          <div 
-            onClick={() => navigate('/admin')}
-            className="bg-white p-4.5 rounded-[22px] border border-slate-100 hover:border-slate-200 transition-all cursor-pointer shadow-xs flex flex-col justify-between min-h-[135px] group text-left relative overflow-hidden"
-          >
-            <div>
-              <div className="flex items-center justify-between gap-1 flex-wrap">
-                <div className="w-8 h-8 rounded-lg bg-violet-50 text-violet-500 flex items-center justify-center shrink-0">
-                  <BarChart2 size={16} strokeWidth={2.5} />
-                </div>
-                <span className="text-[11.5px] font-black text-violet-600 bg-violet-100/60 uppercase tracking-wider px-2 py-1 rounded-full shrink-0">Próximamente</span>
+              <div>
+                <h5 className="font-extrabold text-slate-900 text-base flex items-center gap-1.5">
+                  Analítica Corporativa
+                  <ChevronRight size={16} className="text-slate-400" />
+                </h5>
+                <p className="text-xs sm:text-[13px] font-semibold mt-1 leading-relaxed text-slate-500">
+                  Estadísticas de ocupación, métricas mensuales y descarga de reportes PDF/Excel.
+                </p>
               </div>
-              <h5 className="font-extrabold text-slate-900 text-sm sm:text-base mt-2.5">Reportes</h5>
-              <p className="text-xs sm:text-[13px] font-semibold mt-1 leading-relaxed text-slate-450">
-                Estadísticas globales
-              </p>
             </div>
-          </div>
-
-          {/* Card 4: Moderación */}
-          <div 
-            onClick={() => navigate('/admin')}
-            className="bg-white p-4.5 rounded-[22px] border border-slate-100 hover:border-slate-200 transition-all cursor-pointer shadow-xs flex flex-col justify-between min-h-[135px] group text-left relative overflow-hidden"
-          >
-            <div>
-              <div className="flex items-center justify-between gap-1 flex-wrap">
-                <div className="w-8 h-8 rounded-lg bg-violet-50 text-violet-500 flex items-center justify-center shrink-0">
-                  <ShieldAlert size={16} strokeWidth={2.5} />
-                </div>
-                <span className="text-[11.5px] font-black text-violet-600 bg-violet-100/60 uppercase tracking-wider px-2 py-1 rounded-full shrink-0">Próximamente</span>
-              </div>
-              <h5 className="font-extrabold text-slate-900 text-sm sm:text-base mt-2.5">Moderación</h5>
-              <p className="text-xs sm:text-[13px] font-semibold mt-1 leading-relaxed text-slate-450">
-                Revisar seguridad e incidencias
-              </p>
-            </div>
-          </div>
+          </motion.div>
         </div>
       </section>
 
@@ -227,7 +209,7 @@ export const HomeAdminView: React.FC<HomeAdminViewProps> = ({
           <h3 className="text-base font-black text-slate-900 tracking-tight font-display">
             Actividad reciente
           </h3>
-          <button onClick={() => navigate('/admin')} className="text-violet-600 hover:text-violet-700 text-sm font-black tracking-wider uppercase">
+          <button onClick={() => navigate('/admin/operation')} className="text-violet-600 hover:text-violet-700 text-sm font-black tracking-wider uppercase">
             Ver todas
           </button>
         </div>

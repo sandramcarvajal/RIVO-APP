@@ -207,6 +207,45 @@ routeRouter.post("/", authMiddleware, async (req: AuthRequest, res) => {
     const vehicleId = selectedVehicle.id.toString();
     console.log(`[RouteRouter] Detected selected vehicle with approved SOAT and valid license: ${vehicleId}`);
 
+    // Validate seat capacity capacity rules based on active vehicle type
+    const totalSeats = parseInt(req.body.totalSeats);
+    const vType = (selectedVehicle.type || 'car').toLowerCase();
+
+    if (isNaN(totalSeats)) {
+      return res.status(400).json({
+        success: false,
+        type: "validation",
+        field: "totalSeats",
+        error: "La cantidad de cupos debe ser un número válido.",
+        message: "La cantidad de cupos debe ser un número válido."
+      });
+    }
+
+    if (vType === 'motorcycle') {
+      if (totalSeats !== 1) {
+        console.log(`[RouteRouter] Route creation blocked: Motocicleta requires totalSeats === 1, got ${totalSeats}`);
+        return res.status(400).json({
+          success: false,
+          type: "validation",
+          field: "totalSeats",
+          error: "Para motocicletas, la capacidad de la ruta debe ser exactamente de 1 pasajero.",
+          message: "Para motocicletas, la capacidad de la ruta debe ser exactamente de 1 pasajero."
+        });
+      }
+    } else {
+      // Automóvil/Camioneta
+      if (totalSeats < 1 || totalSeats > 4) {
+        console.log(`[RouteRouter] Route creation blocked: Automóvil/Camioneta requires totalSeats between 1 and 4, got ${totalSeats}`);
+        return res.status(400).json({
+          success: false,
+          type: "validation",
+          field: "totalSeats",
+          error: "La capacidad de la ruta debe estar entre 1 y 4 pasajeros para automóviles o camionetas.",
+          message: "La capacidad de la ruta debe estar entre 1 y 4 pasajeros para automóviles o camionetas."
+        });
+      }
+    }
+
     // Verification of Pico y Placa Metropolitan Restriction
     try {
       const departureTimeRaw = req.body.departureTime;

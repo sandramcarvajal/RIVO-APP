@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Clock, CheckCircle2, XCircle, User, ArrowRight, MessageSquare, Inbox } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAppStore } from '../hooks/useAppStore';
 import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
@@ -12,8 +12,9 @@ import { UserRole, JoinRequestStatus, RouteStatus } from '../shared/enums';
 const RequestsView = () => {
   const { user, requests, updateRequestStatus, routes } = useAppStore();
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeTab, setActiveTab] = React.useState<'recibidas' | 'enviadas' | 'historial'>(
-    user?.role === UserRole.DRIVER ? 'recibidas' : 'enviadas'
+    location.state?.tab || (user?.role === UserRole.DRIVER ? 'recibidas' : 'enviadas')
   );
 
   // Filter requests based on user role and tab

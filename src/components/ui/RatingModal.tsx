@@ -19,6 +19,7 @@ const RatingModal: React.FC<RatingModalProps> = ({ isOpen, onClose, onSubmit, ta
   const { showToast } = useToast();
 
   const handleSubmit = async () => {
+    if (isSubmitting) return;
     setIsSubmitting(true);
     try {
       await onSubmit(score, comment);

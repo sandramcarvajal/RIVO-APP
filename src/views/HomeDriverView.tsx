@@ -185,7 +185,7 @@ export const HomeDriverView: React.FC<HomeDriverViewProps> = ({
   };
 
   return (
-    <div className="max-w-[480px] mx-auto w-full space-y-6 relative pb-24 text-left bg-transparent min-h-screen px-4 pt-1.5">
+    <div className="max-w-full md:max-w-4xl lg:max-w-5xl xl:max-w-6xl mx-auto w-full space-y-6 relative pb-24 text-left bg-transparent min-h-screen px-4 pt-1.5">
       {/* Decorative premium path glow effects */}
       <div className="absolute top-[-90px] right-[-90px] w-96 h-96 bg-indigo-500/5 rounded-full blur-[100px] pointer-events-none -z-10" />
       <div className="absolute top-[40%] left-[-120px] w-80 h-80 bg-emerald-200/5 rounded-full blur-[110px] pointer-events-none -z-10" />

@@ -15,7 +15,6 @@ import {
   Moon,
   ArrowRight,
   ShieldCheck,
-  Power,
   LogOut,
   History,
   MapPin,
@@ -40,6 +39,7 @@ import { cn } from '../lib/utils';
 import { User, Route, JoinRequest } from '../types';
 import { UserRole, RouteStatus, JoinRequestStatus } from '../shared/enums';
 import MyGarage from '../components/MyGarage';
+import { HistoryCard } from '../components/HistoryCard';
 
 // --- Driver Profile Component ---
 interface DriverProfileProps {
@@ -60,11 +60,6 @@ const DriverProfile = ({ user, setIsEditing, isEditing }: DriverProfileProps) =>
 
   const myRoutes = routes.filter(r => String(r.driverId) === String(user?.id));
 
-  const toggleAvailability = () => {
-    updateUserProfile({ isAvailable: !user?.isAvailable });
-    showToast(user?.isAvailable ? 'Ahora estás en modo desconectado' : '¡Estás disponible para conducir!');
-  };
-
   const handleSaveVehicle = () => {
     updateUserProfile({ vehicle: editVehicle });
     setIsEditingVehicle(false);
@@ -84,45 +79,6 @@ const DriverProfile = ({ user, setIsEditing, isEditing }: DriverProfileProps) =>
 
   return (
     <div className="space-y-8">
-      {/* Availability Toggle */}
-      <section className="px-2">
-        <div className={cn(
-          "card-rivo p-1 flex items-center justify-between border-2 transition-all duration-500",
-          user?.isAvailable 
-            ? "border-emerald-500/20 bg-emerald-50/20" 
-            : "border-slate-200 bg-white"
-        )}>
-          <div className="flex items-center gap-4 p-4">
-            <div className={cn(
-              "w-12 h-12 rounded-2xl flex items-center justify-center transition-all",
-              user?.isAvailable ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30" : "bg-slate-100 text-slate-400"
-            )}>
-              <Power size={22} />
-            </div>
-            <div>
-              <p className={cn("font-bold transition-colors", user?.isAvailable ? "text-emerald-900" : "text-slate-900")}>
-                {user?.isAvailable ? 'Disponible para conducir' : 'En modo desconectado'}
-              </p>
-              <p className="text-xs text-slate-500">
-                {user?.isAvailable ? 'Tu ruta es visible para otros' : 'Activa para recibir solicitudes'}
-              </p>
-            </div>
-          </div>
-          <button 
-            onClick={toggleAvailability}
-            className={cn(
-              "relative inline-flex h-8 w-14 items-center rounded-full transition-colors focus:outline-none mr-4",
-              user?.isAvailable ? "bg-emerald-500" : "bg-slate-200"
-            )}
-          >
-            <span className={cn(
-              "inline-block h-6 w-6 transform rounded-full bg-white transition-transform",
-              user?.isAvailable ? "translate-x-7" : "translate-x-1"
-            )} />
-          </button>
-        </div>
-      </section>
-
       {/* Rivo Garage - Multi-vehicle & official documents administrator */}
       <section className="px-2">
         <MyGarage />
@@ -150,72 +106,67 @@ const DriverProfile = ({ user, setIsEditing, isEditing }: DriverProfileProps) =>
       {/* Mis Rutas Section */}
       <section className="px-2 space-y-4">
         <div className="flex items-center justify-between px-1">
-          <h2 className="text-lg font-bold text-slate-800">Mis rutas publicadas</h2>
-          <span className="text-sm font-black text-slate-400 uppercase bg-slate-100 px-3 py-1.5 rounded-lg">{myRoutes.length} TOTAL</span>
+          <div className="flex items-center gap-2">
+            <Clock size={20} className="text-slate-400" />
+            <h2 className="text-lg font-bold text-slate-800">Mis rutas publicadas</h2>
+          </div>
+          <button 
+            type="button"
+            className="text-xs font-black uppercase tracking-wider text-primary hover:text-primary/80 flex items-center gap-1 transition-all" 
+            onClick={() => navigate('/requests', { state: { tab: 'historial' } })}
+          >
+            Ver historial completo
+            <ArrowRight size={13} strokeWidth={2.5} />
+          </button>
         </div>
         
         {myRoutes.length > 0 ? (
-          <div className="space-y-4">
-            {myRoutes.map((route: Route) => (
-              <div key={route.id} className="card-rivo p-6 space-y-4 group transition-all hover:border-primary/20">
-                <div className="flex items-center justify-between">
-                   <div className="flex items-center gap-2">
-                     <div className={cn(
-                       "w-8 h-8 rounded-lg flex items-center justify-center",
-                       route.status.toLowerCase() === RouteStatus.SCHEDULED ? "bg-blue-50 text-blue-500" :
-                       route.status.toLowerCase() === RouteStatus.IN_PROGRESS ? "bg-amber-50 text-amber-500" :
-                       route.status.toLowerCase() === RouteStatus.COMPLETED ? "bg-slate-50 text-slate-400" : "bg-red-50 text-red-500"
-                     )}>
-                       <Clock size={16} />
-                     </div>
-                     <span className={cn(
-                       "text-xs font-black uppercase tracking-widest px-2.5 py-1 rounded-full",
-                       route.status.toLowerCase() === RouteStatus.SCHEDULED ? "bg-blue-50 text-blue-500" :
-                       route.status.toLowerCase() === RouteStatus.IN_PROGRESS ? "bg-amber-50 text-amber-500" :
-                       route.status.toLowerCase() === RouteStatus.COMPLETED ? "bg-slate-100 text-slate-500" : "bg-red-100 text-red-500"
-                     )}>
-                       {route.status.toLowerCase() === RouteStatus.SCHEDULED ? 'Programado' :
-                        route.status.toLowerCase() === RouteStatus.IN_PROGRESS ? 'En progreso' :
-                        route.status.toLowerCase() === RouteStatus.COMPLETED ? 'Completado' :
-                        route.status.toLowerCase() === RouteStatus.CANCELLED ? 'Cancelado' : route.status}
-                     </span>
-                   </div>
-                  <p className="text-xs font-bold text-slate-400">{route.date} • {route.time}</p>
-                </div>
-                
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                    <p className="text-sm font-bold text-slate-700 truncate">{route.origin}</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-1.5 h-1.5 rounded-full bg-accent" />
-                    <p className="text-sm font-bold text-slate-700 truncate">{route.destination}</p>
-                  </div>
-                </div>
+          <div className="space-y-3">
+            {[...myRoutes]
+              .sort((a, b) => new Date(b.departureTime).getTime() - new Date(a.departureTime).getTime())
+              .slice(0, 5)
+              .map((route: Route) => {
+                const statusLower = route.status.toLowerCase();
+                const isCompleted = statusLower === RouteStatus.COMPLETED;
+                const isCancelled = statusLower === RouteStatus.CANCELLED;
+                const isInProgress = statusLower === RouteStatus.IN_PROGRESS;
+                const isScheduled = statusLower === RouteStatus.SCHEDULED;
 
-                <div className="pt-4 border-t border-slate-50 flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div>
-                      <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Cupos</p>
-                      <p className="text-sm font-bold text-slate-700 mt-0.5">{route.availableSeats}/{route.totalSeats}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Precio</p>
-                      <p className="text-sm font-bold text-slate-700 mt-0.5">${route.price}</p>
-                    </div>
-                  </div>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-8 text-primary font-bold"
+                let statusText: string = route.status;
+                let statusType: 'success' | 'danger' | 'warning' | 'info' | 'neutral' = 'neutral';
+
+                if (isCompleted) {
+                  statusText = 'Completado';
+                  statusType = 'success';
+                } else if (isCancelled) {
+                  statusText = 'Cancelado';
+                  statusType = 'danger';
+                } else if (isInProgress) {
+                  statusText = 'En progreso';
+                  statusType = 'warning';
+                } else if (isScheduled) {
+                  statusText = 'Programado';
+                  statusType = 'info';
+                }
+
+                return (
+                  <HistoryCard
+                    key={route.id}
+                    origin={route.origin}
+                    destination={route.destination}
+                    date={route.date}
+                    time={route.time}
+                    price={route.price}
+                    status={statusText}
+                    statusType={statusType}
+                    avatar={user?.avatar}
+                    avatarIcon={<Car size={18} className="text-slate-400" />}
+                    titleLabel="Cupos"
+                    titleValue={`${route.availableSeats}/${route.totalSeats}`}
                     onClick={() => navigate(`/route/${route.id}`)}
-                  >
-                    Detalles
-                  </Button>
-                </div>
-              </div>
-            ))}
+                  />
+                );
+              })}
           </div>
         ) : (
           <EmptyState 
@@ -240,7 +191,6 @@ interface PassengerProfileProps {
 const PassengerProfile = ({ user }: PassengerProfileProps) => {
   const { requests, routes } = useAppStore();
   const navigate = useNavigate();
-  const [showAllHistory, setShowAllHistory] = React.useState(false);
 
    // Filter requests sent by this passenger
    const myRequests = requests.filter((r: JoinRequest) => String(r.passengerId) === String(user?.id));
@@ -256,8 +206,6 @@ const PassengerProfile = ({ user }: PassengerProfileProps) => {
       return new Date(rb.departureTime).getTime() - new Date(ra.departureTime).getTime();
    });
 
-   const myAcceptedRequests = myRequests.filter(r => r.status.toLowerCase() === JoinRequestStatus.ACCEPTED);
-   
    const passengerStats = [
     { label: 'Viajes finalizados', value: history.filter(h => h.status === JoinRequestStatus.ACCEPTED).length.toString(), icon: CheckCircle2, color: 'text-indigo-500' },
     { label: 'Rating promedio', value: (!user?.reviewCount || user.reviewCount === 0 || !user?.rating) ? 'Nuevo' : parseFloat(user.rating.toString()).toFixed(1), icon: Star, color: 'text-amber-500' },
@@ -289,52 +237,57 @@ const PassengerProfile = ({ user }: PassengerProfileProps) => {
             <Clock size={20} className="text-slate-400" />
             <h2 className="text-lg font-bold text-slate-800">Historial de viajes</h2>
           </div>
-          <button className="text-xs font-bold text-primary" onClick={() => navigate('/requests')}>Ver historial</button>
+          <button 
+            type="button"
+            className="text-xs font-black uppercase tracking-wider text-primary hover:text-primary/80 flex items-center gap-1 transition-all" 
+            onClick={() => navigate('/requests', { state: { tab: 'historial' } })}
+          >
+            Ver historial completo
+            <ArrowRight size={13} strokeWidth={2.5} />
+          </button>
         </div>
         
         {history.length > 0 ? (
           <div className="space-y-3">
-            {(showAllHistory ? history : history.slice(0, 4)).map((req: JoinRequest) => {
+            {history.slice(0, 5).map((req: JoinRequest) => {
               const route = routes.find((r: Route) => r.id === req.routeId);
               const isCompleted = route?.status === RouteStatus.COMPLETED && req.status === JoinRequestStatus.ACCEPTED;
+              
+              let statusText = 'Finalizado';
+              let statusType: 'success' | 'danger' | 'warning' | 'info' | 'neutral' = 'neutral';
+              
+              if (isCompleted) {
+                statusText = 'Completado';
+                statusType = 'success';
+              } else if (req.status === JoinRequestStatus.REJECTED) {
+                statusText = 'Rechazado';
+                statusType = 'danger';
+              } else if (req.status === JoinRequestStatus.CANCELLED_BY_DRIVER) {
+                statusText = 'Conductor Canceló';
+                statusType = 'danger';
+              } else if (req.status === JoinRequestStatus.CANCELLED) {
+                statusText = 'Cancelado';
+                statusType = 'neutral';
+              }
+
               return (
-                <div key={req.id} className="p-4 bg-white border border-slate-50 rounded-[2rem] shadow-sm flex items-center justify-between opacity-80 transition-opacity hover:opacity-100">
-                   <div className="flex items-center gap-4">
-                     <div className={cn(
-                       "w-10 h-10 rounded-xl flex items-center justify-center",
-                       isCompleted ? "bg-emerald-50 text-emerald-500" : "bg-slate-50 text-slate-400"
-                     )}>
-                       {isCompleted ? <CheckCircle2 size={18} /> : <History size={18} />}
-                     </div>
-                     <div>
-                       <p className="text-sm font-bold text-slate-800">{(route?.destination || 'Ruta').split(',')[0]}</p>
-                       <p className="text-xs uppercase font-black tracking-widest text-slate-400 mt-0.5">
-                        {route?.date} • {
-                          isCompleted ? 'Completado' : 
-                          req.status === JoinRequestStatus.REJECTED ? 'Rechazado' : 
-                          req.status === JoinRequestStatus.CANCELLED_BY_DRIVER ? 'Cancelado por conductor' : 
-                          req.status === JoinRequestStatus.CANCELLED ? 'Cancelado por ti' : 'Finalizado'
-                        }
-                       </p>
-                     </div>
-                   </div>
-                  <ChevronRight size={16} className="text-slate-300" />
-                </div>
+                <HistoryCard
+                  key={req.id}
+                  origin={route?.origin || 'Origen'}
+                  destination={route?.destination || 'Destino'}
+                  date={route?.date || 'Fecha'}
+                  time={route?.time || ''}
+                  price={route?.price}
+                  status={statusText}
+                  statusType={statusType}
+                  avatar={route?.driverAvatar}
+                  avatarIcon={<UserIcon size={18} className="text-slate-400" />}
+                  titleLabel="Conductor"
+                  titleValue={route?.driverName || 'Compañero'}
+                  onClick={route ? () => navigate(`/route/${route.id}`) : undefined}
+                />
               );
             })}
-
-            {history.length > 4 && (
-              <div className="flex justify-center pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAllHistory(!showAllHistory)}
-                  className="text-primary hover:text-primary-hover text-sm font-black tracking-wider flex items-center gap-1 transition-all uppercase"
-                >
-                  {showAllHistory ? 'Ver menos' : 'Ver todo el historial'}
-                  <ArrowRight size={13} className={cn("transition-transform duration-200", showAllHistory ? "-rotate-90" : "rotate-90")} strokeWidth={2.5} />
-                </button>
-              </div>
-            )}
           </div>
         ) : (
           <EmptyState 
@@ -411,7 +364,7 @@ const ProfileView = () => {
   };
 
   return (
-    <div className="space-y-8 pb-24 overflow-x-hidden pt-4 max-w-2xl mx-auto px-4 sm:px-6">
+    <div className="space-y-8 pb-24 overflow-x-hidden pt-4 max-w-full md:max-w-4xl lg:max-w-5xl xl:max-w-6xl mx-auto px-4 sm:px-6">
       {/* 1. 👤 Header */}
       <header className="px-2">
         <div className="flex items-center gap-6">
@@ -460,7 +413,7 @@ const ProfileView = () => {
                    <span className="text-sm font-black">{(!user?.reviewCount || user.reviewCount === 0 || !user?.rating) ? 'Nuevo' : parseFloat(user.rating.toString()).toFixed(1)}</span>
                  </div>
                  <div className="px-3 py-1.5 bg-slate-900 text-white text-xs font-black uppercase tracking-wider rounded-2xl">
-                   {user?.role === UserRole.DRIVER ? 'Conductor' : 'Pasajero'}
+                   {user?.role === UserRole.DRIVER ? 'Conductor' : user?.role === UserRole.ADMIN ? 'Administrador' : 'Pasajero'}
                  </div>
               </div>
             </div>
@@ -515,39 +468,61 @@ const ProfileView = () => {
          </div>
          <div className="bg-white border border-slate-100 rounded-[32px] overflow-hidden divide-y divide-slate-50 shadow-sm">
             {[
-              { icon: Bell, label: 'Notificaciones push', color: 'text-blue-500', path: '/notifications' },
-              { icon: Moon, label: 'Modo oscuro', color: 'text-slate-400', badge: 'Próximamente' },
-              { icon: ShieldCheck, label: 'Privacidad de datos', color: 'text-emerald-500' },
-              { icon: HelpCircle, label: 'Centro de ayuda SyC', color: 'text-amber-500' },
+              { 
+                icon: Bell, 
+                label: 'Notificaciones push', 
+                color: 'text-violet-600 bg-violet-50 border-violet-100/50', 
+                badge: 'Próximamente',
+                onClick: () => showToast('Funcionalidad disponible próximamente.', 'info')
+              },
+              { 
+                icon: Moon, 
+                label: 'Modo oscuro', 
+                color: 'text-indigo-600 bg-indigo-50 border-indigo-100/50', 
+                badge: 'Próximamente',
+                onClick: () => showToast('Modo oscuro disponible próximamente.', 'info')
+              },
+              { 
+                icon: ShieldCheck, 
+                label: 'Privacidad de datos', 
+                color: 'text-emerald-600 bg-emerald-50 border-emerald-100/50', 
+                onClick: () => navigate('/profile/privacy')
+              },
+              { 
+                icon: HelpCircle, 
+                label: 'Centro de ayuda', 
+                color: 'text-amber-600 bg-amber-50 border-amber-100/50', 
+                onClick: () => navigate('/profile/help')
+              },
             ].map((item, i) => (
               <button 
                 key={i} 
-                onClick={() => item.path && navigate(item.path)}
-                className="w-full flex items-center justify-between p-5 hover:bg-slate-50/50 transition-all text-left"
+                onClick={item.onClick}
+                className="w-full flex items-center justify-between p-5 hover:bg-slate-50/60 transition-all duration-200 text-left cursor-pointer group"
               >
                  <div className="flex items-center gap-4">
-                    <div className={cn("p-2.5 rounded-2xl bg-opacity-10", item.color.replace('text', 'bg'))}>
-                       <item.icon size={20} className={item.color} />
+                    <div className={cn("p-2.5 rounded-2xl border transition-all duration-200 group-hover:scale-105", item.color)}>
+                       <item.icon size={20} className="transition-transform duration-200 group-hover:scale-110" />
                     </div>
                     <div>
-                      <p className="font-bold text-slate-700 text-sm">{item.label}</p>
-                      {item.badge && <span className="text-xs font-black uppercase tracking-wider text-slate-450 mt-1 block">{item.badge}</span>}
+                      <p className="font-bold text-slate-800 text-sm group-hover:text-violet-700 transition-colors">{item.label}</p>
+                      {item.badge && <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 mt-0.5 block">{item.badge}</span>}
                     </div>
                  </div>
-                 <ChevronRight size={18} className="text-slate-200" />
+                 <ChevronRight size={18} className="text-slate-300 transition-all duration-200 group-hover:translate-x-1 group-hover:text-violet-500" />
               </button>
             ))}
             <button 
               onClick={() => setShowLogoutModal(true)}
-              className="w-full flex items-center justify-between p-5 hover:bg-red-50/30 transition-all text-left group"
+              className="w-full flex items-center justify-between p-5 hover:bg-red-50/40 transition-all duration-200 text-left cursor-pointer group"
             >
                <div className="flex items-center gap-4">
-                  <div className="p-2.5 rounded-2xl bg-red-50 text-red-500 group-hover:bg-red-100 transition-colors">
-                     <LogOut size={20} />
+                  <div className="p-2.5 rounded-2xl bg-red-50 text-red-500 group-hover:bg-red-100 group-hover:scale-105 transition-all duration-200">
+                     <LogOut size={20} className="transition-transform duration-200 group-hover:scale-110" />
                   </div>
                   <p className="font-bold text-red-500 text-sm">Cerrar sesión</p>
                </div>
-               <ChevronRight size={18} className="text-red-200" />
+               <ChevronRight size={18} className="text-red-200 transition-all duration-200 group-hover:translate-x-1 group-hover:text-red-500" />
             </button>
          </div>
       </section>
@@ -591,7 +566,7 @@ const ProfileView = () => {
       </Modal>
 
        <footer className="text-center py-10">
-        <p className="text-xs text-slate-400 font-extrabold uppercase tracking-[0.16em]">Rivo v1.0.8 • Experiencia {user?.role === UserRole.DRIVER ? 'Conductor' : 'Pasajero'} • SyC</p>
+        <p className="text-xs text-slate-400 font-extrabold uppercase tracking-[0.16em]">Rivo v1.0.8 • Experiencia {user?.role === UserRole.DRIVER ? 'Conductor' : user?.role === UserRole.ADMIN ? 'Administrador' : 'Pasajero'} • SyC</p>
       </footer>
     </div>
   );

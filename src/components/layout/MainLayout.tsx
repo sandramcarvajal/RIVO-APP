@@ -1,7 +1,7 @@
 import React from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Home, PlusCircle, LayoutDashboard, User, Bell, Compass, LogOut } from 'lucide-react';
+import { Home, PlusCircle, LayoutDashboard, User, Bell, Compass, LogOut, ClipboardList, BarChart3 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAppStore } from '../../hooks/useAppStore';
 import Modal from '../ui/Modal';
@@ -57,19 +57,28 @@ const MainLayout = () => {
   const unreadCount = notifications.filter(n => String(n.userId) === String(user?.id) && !n.isRead).length;
   console.log(`[UNREAD_COUNT] Calculated unreadCount: ${unreadCount} total unread out of ${notifications.length} notifications`);
 
-  const navItems = [
-    { icon: Home, label: 'Inicio', path: '/' },
-    { icon: Compass, label: 'Explorar', path: '/explore' },
-    { icon: PlusCircle, label: 'Publicar', path: '/create', roles: ['driver', 'admin'] },
-    { icon: User, label: 'Perfil', path: '/profile' },
-  ];
-
-  const filteredNav = navItems.filter(item => !item.roles || (user && item.roles.includes(user.role)));
+  let filteredNav;
+  if (user?.role === 'admin') {
+    filteredNav = [
+      { icon: Home, label: 'Inicio', path: '/' },
+      { icon: ClipboardList, label: 'Operación', path: '/admin/operation' },
+      { icon: BarChart3, label: 'Analítica', path: '/admin/analytics' },
+      { icon: User, label: 'Perfil', path: '/profile' },
+    ];
+  } else {
+    const navItems = [
+      { icon: Home, label: 'Inicio', path: '/' },
+      { icon: Compass, label: 'Explorar', path: '/explore' },
+      { icon: PlusCircle, label: 'Publicar', path: '/create', roles: ['driver'] },
+      { icon: User, label: 'Perfil', path: '/profile' },
+    ];
+    filteredNav = navItems.filter(item => !item.roles || (user && item.roles.includes(user.role)));
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex justify-center">
-      {/* Mobile-style Container for all screens */}
-      <div className="w-full max-w-[480px] min-h-screen bg-background flex flex-col relative shadow-2xl shadow-slate-200">
+      {/* Responsive layout container for all screens */}
+      <div className="w-full max-w-full md:max-w-3xl lg:max-w-5xl xl:max-w-6xl min-h-screen bg-background flex flex-col relative sm:shadow-2xl sm:shadow-slate-200/50 sm:border-x sm:border-slate-200/40">
         
         {isCookieBlocked && (
           <div className="bg-rose-600 text-white p-3 text-xs font-semibold text-center flex flex-col gap-1 items-center justify-center border-b border-rose-700 animate-pulse z-50">
@@ -176,8 +185,8 @@ const MainLayout = () => {
           <Outlet />
         </main>
 
-        {/* Fixed Bottom Nav (Always Visible) */}
-        <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] h-20 bg-white/90 backdrop-blur-xl border-t border-slate-100 flex items-center justify-around px-2 pb-2 z-40">
+        {/* Fixed Bottom Nav (Responsive Alignment) */}
+        <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-full md:max-w-3xl lg:max-w-5xl xl:max-w-6xl h-20 bg-white/90 backdrop-blur-xl border-t border-slate-100 flex items-center justify-around px-2 pb-2 z-40 shadow-[0_-4px_12px_rgba(0,0,0,0.02)]">
           {filteredNav.map((item) => (
             <button
               key={item.path}

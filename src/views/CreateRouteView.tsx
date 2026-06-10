@@ -175,8 +175,13 @@ const CreateRouteForm = ({ apiKey }: { apiKey: string }) => {
   const [isValidating, setIsValidating] = React.useState(false);
 
   React.useEffect(() => {
-    if (selectedVehicle?.plate) {
-      setFormData(prev => ({ ...prev, plate: selectedVehicle.plate }));
+    if (selectedVehicle) {
+      const isMotorcycle = selectedVehicle.type === 'motorcycle';
+      setFormData(prev => ({
+        ...prev,
+        plate: selectedVehicle.plate || '',
+        totalSeats: isMotorcycle ? 1 : (prev.totalSeats > 4 ? 4 : (prev.totalSeats || 1))
+      }));
     }
   }, [selectedVehicle]);
 
@@ -211,6 +216,7 @@ const CreateRouteForm = ({ apiKey }: { apiKey: string }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     
     if (activeRoute) {
       showToast('Ya tienes una ruta activa. Debes finalizarla antes de crear una nueva.', 'error');
@@ -511,23 +517,42 @@ const CreateRouteForm = ({ apiKey }: { apiKey: string }) => {
               <Users size={20} className="text-primary" />
               Cupos disponibles
             </div>
-            <div className="flex items-center gap-4">
-              {[1, 2, 3, 4].map((num) => (
-                <button
-                  key={num}
-                  type="button"
-                  onClick={() => setFormData({ ...formData, totalSeats: num })}
-                  className={cn(
-                    "w-10 h-10 rounded-xl font-bold transition-all",
-                    formData.totalSeats === num
-                      ? "bg-primary text-white shadow-lg shadow-primary/20"
-                      : "bg-slate-50 text-slate-400 hover:bg-slate-100"
-                  )}
-                >
-                  {num}
-                </button>
-              ))}
-            </div>
+            {selectedVehicle?.type === 'motorcycle' ? (
+              <div className="space-y-4">
+                <div className="flex items-start gap-2.5 bg-indigo-50/70 border border-indigo-100/80 rounded-2xl p-3.5 text-[11px] text-indigo-700 font-semibold leading-relaxed">
+                  <span className="text-base select-none mt-0.5">🛵</span>
+                  <span>Las motocicletas solo permiten 1 pasajero adicional por seguridad vial y regulación.</span>
+                </div>
+                <div className="flex items-center gap-4">
+                  <button
+                    type="button"
+                    disabled
+                    className="w-10 h-10 rounded-xl font-bold bg-primary text-white shadow-lg shadow-primary/20 cursor-not-allowed flex items-center justify-center"
+                    title="Las motocicletas tienen cupo único de 1 pasajero"
+                  >
+                    1
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-4">
+                {[1, 2, 3, 4].map((num) => (
+                  <button
+                    key={num}
+                    type="button"
+                    onClick={() => setFormData({ ...formData, totalSeats: num })}
+                    className={cn(
+                      "w-10 h-10 rounded-xl font-bold transition-all",
+                      formData.totalSeats === num
+                        ? "bg-primary text-white shadow-lg shadow-primary/20"
+                        : "bg-slate-50 text-slate-400 hover:bg-slate-100"
+                    )}
+                  >
+                    {num}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="card-rivo space-y-4">

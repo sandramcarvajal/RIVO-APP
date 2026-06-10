@@ -36,6 +36,7 @@ const RouteDetailView = () => {
     cancelJoinRequest,
     getRoutePassengers,
     submitReview,
+    getMyReviewsForRoute,
     requestJoin
   } = useAppContext();
   const { showToast } = useToast();
@@ -43,6 +44,7 @@ const RouteDetailView = () => {
   const [routePassengers, setRoutePassengers] = useState<any[]>([]);
   const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
   const [ratingTarget, setRatingTarget] = useState<{ id: string, name: string } | null>(null);
+  const [ratedUserIds, setRatedUserIds] = useState<number[]>([]);
   
   const [isStarting, setIsStarting] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
@@ -61,6 +63,18 @@ const RouteDetailView = () => {
       getRoutePassengers(id).then(setRoutePassengers);
     }
   }, [id, isDriver, getRoutePassengers, requests]);
+
+  useEffect(() => {
+    if (id && route && route.status === RouteStatus.COMPLETED) {
+      getMyReviewsForRoute(route.id)
+        .then(res => {
+          if (res && res.ratedUserIds) {
+            setRatedUserIds(res.ratedUserIds.map((num: any) => Number(num)));
+          }
+        })
+        .catch(err => console.error("Error fetching my reviews for route:", err));
+    }
+  }, [id, route?.status, getMyReviewsForRoute]);
 
   if (!route) {
     return (
@@ -164,6 +178,7 @@ const RouteDetailView = () => {
       score,
       comment
     });
+    setRatedUserIds(prev => [...prev, Number(ratingTarget.id)]);
   };
 
   const statusColors = {
@@ -174,7 +189,7 @@ const RouteDetailView = () => {
   };
 
   return (
-    <div className="space-y-8 pb-24 max-w-lg mx-auto px-2">
+    <div className="space-y-8 pb-24 max-w-full md:max-w-4xl lg:max-w-5xl xl:max-w-6xl mx-auto px-4">
       <header className="flex items-center gap-4 pt-4">
         <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
           <ArrowLeft size={24} className="text-slate-600" />
@@ -311,24 +326,33 @@ const RouteDetailView = () => {
 
             {routePassengers.length > 0 ? (
               <div className="space-y-3">
-                 {routePassengers.map(p => (
-                   <div key={p.id} className="flex items-center justify-between p-4 bg-white border border-slate-100 rounded-3xl">
-                      <div className="flex items-center gap-3">
-                         <img src={p.avatar || `https://ui-avatars.com/api/?name=${p.name}`} className="w-10 h-10 rounded-xl" />
-                         <p className="font-bold text-slate-800">{p.name}</p>
-                      </div>
-                      {route.status === RouteStatus.COMPLETED && (
-                        <Button 
-                          size="sm" 
-                          variant="ghost" 
-                          className="text-primary font-bold"
-                          onClick={() => handleRateUser(p.id, p.name)}
-                        >
-                          Calificar
-                        </Button>
-                      )}
-                   </div>
-                 ))}
+                 {routePassengers.map(p => {
+                   const alreadyRated = ratedUserIds.includes(Number(p.id));
+                   return (
+                     <div key={p.id} className="flex items-center justify-between p-4 bg-white border border-slate-100 rounded-3xl">
+                        <div className="flex items-center gap-3">
+                           <img src={p.avatar || `https://ui-avatars.com/api/?name=${p.name}`} className="w-10 h-10 rounded-xl" />
+                           <p className="font-bold text-slate-800">{p.name}</p>
+                        </div>
+                        {route.status === RouteStatus.COMPLETED && (
+                          alreadyRated ? (
+                            <span className="text-xs text-emerald-600 font-bold bg-emerald-50 border border-emerald-100/50 px-3 py-1.5 rounded-full select-none">
+                              Calificado ✓
+                            </span>
+                          ) : (
+                            <Button 
+                              size="sm" 
+                              variant="ghost" 
+                              className="text-primary font-bold"
+                              onClick={() => handleRateUser(p.id, p.name)}
+                            >
+                              Calificar
+                            </Button>
+                          )
+                        )}
+                     </div>
+                   );
+                 })}
               </div>
             ) : (
               <div className="text-center p-8 bg-slate-50 rounded-3xl border border-dashed border-slate-200">
@@ -397,9 +421,18 @@ const RouteDetailView = () => {
                </div>
 
                {myRequest?.status === JoinRequestStatus.ACCEPTED && route.status === RouteStatus.COMPLETED && (
-                 <Button className="w-full py-6 rounded-2xl bg-amber-400 text-white" onClick={() => handleRateUser(String(route.driverId), "el Conductor")}>
-                   <Star size={18} fill="currentColor" className="mr-2" /> Calificar Conductor
-                 </Button>
+                 ratedUserIds.includes(Number(route.driverId)) ? (
+                   <Button 
+                     disabled
+                     className="w-full py-6 rounded-2xl bg-slate-100 text-emerald-600 font-bold border border-emerald-100/50 cursor-not-allowed flex items-center justify-center gap-1"
+                   >
+                     Calificación enviada ✓
+                   </Button>
+                 ) : (
+                   <Button className="w-full py-6 rounded-2xl bg-amber-400 text-white" onClick={() => handleRateUser(String(route.driverId), "el Conductor")}>
+                     <Star size={18} fill="currentColor" className="mr-2" /> Calificar Conductor
+                   </Button>
+                 )
                )}
 
                {myRequest?.status === JoinRequestStatus.PENDING && (

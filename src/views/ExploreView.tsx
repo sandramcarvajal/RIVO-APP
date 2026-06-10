@@ -238,7 +238,7 @@ const PassengerExplore = ({ user, routes, requests, requestJoin }: PassengerExpl
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 max-w-[480px] mx-auto w-full px-1">
+    <div className="space-y-6 animate-in fade-in duration-500 max-w-full md:max-w-4xl lg:max-w-5xl xl:max-w-6xl mx-auto w-full px-1">
       <header className="space-y-1">
         <h2 className="text-2xl font-black text-slate-900 tracking-tight text-left">Explorar Rutas</h2>
         <p className="text-sm text-slate-500 font-semibold text-left leading-snug">

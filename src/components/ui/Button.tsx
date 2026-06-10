@@ -6,10 +6,12 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
   size?: 'sm' | 'md' | 'lg';
   isLoading?: boolean;
+  loading?: boolean;
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = 'primary', size = 'md', isLoading, children, ...props }, ref) => {
+  ({ className, variant = 'primary', size = 'md', isLoading, loading, children, ...props }, ref) => {
+    const isBtnLoading = isLoading || loading;
     const variants = {
       primary: 'btn-primary',
       secondary: 'btn-secondary',
@@ -34,10 +36,10 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           sizes[size],
           className
         )}
-        disabled={isLoading}
+        disabled={isBtnLoading}
         {...props}
       >
-        {isLoading ? (
+        {isBtnLoading ? (
           <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
         ) : (
           children
