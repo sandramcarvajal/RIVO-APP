@@ -60,7 +60,6 @@ const MainLayout = () => {
   let filteredNav;
   if (user?.role === 'admin') {
     filteredNav = [
-      { icon: Home, label: 'Inicio', path: '/' },
       { icon: ClipboardList, label: 'Operación', path: '/admin/operation' },
       { icon: BarChart3, label: 'Analítica', path: '/admin/analytics' },
       { icon: User, label: 'Perfil', path: '/profile' },
@@ -96,7 +95,7 @@ const MainLayout = () => {
 
         {/* Mobile Top Bar */}
         <header className="flex items-center justify-between p-4.5 bg-white/95 backdrop-blur-md sticky top-0 z-30 border-b border-slate-100/60">
-          <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => navigate('/')}>
+          <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => navigate(user?.role === 'admin' ? '/admin/operation' : '/')}>
             <img 
               src="/logo_rivo.svg" 
               alt="Rivo Logo" 

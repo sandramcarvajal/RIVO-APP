@@ -15,9 +15,56 @@ import {
   Award
 } from 'lucide-react';
 import { useToast } from '../components/ui/Toast';
+import { SecureHttpClient } from '../client/modules/auth/services/SecureHttpClient';
 
 const AdminAnalyticsView = () => {
   const { showToast } = useToast();
+  const [stats, setStats] = React.useState({
+    totalUsers: 0,
+    drivers: 0,
+    passengers: 0,
+    totalVehicles: 0,
+    pendingVehicles: 0,
+    activeRoutes: 0,
+    completedRoutes: 0,
+    averageRating: 4.91
+  });
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    let active = true;
+    const fetchStats = async () => {
+      try {
+        const response = await SecureHttpClient.request('/api/routes/admin/analytics/stats');
+        if (response.ok) {
+          const data = await response.json();
+          if (active) {
+            setStats({
+              totalUsers: data.totalUsers ?? 0,
+              drivers: data.drivers ?? 0,
+              passengers: data.passengers ?? 0,
+              totalVehicles: data.totalVehicles ?? 0,
+              pendingVehicles: data.pendingVehicles ?? 0,
+              activeRoutes: data.activeRoutes ?? 0,
+              completedRoutes: data.completedRoutes ?? 0,
+              averageRating: data.averageRating ?? 4.91
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching admin statistics:", err);
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchStats();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleExport = (format: string, reportType: string) => {
     showToast(`Preparando exportación de ${reportType} en formato ${format}...`, 'info');
@@ -27,10 +74,14 @@ const AdminAnalyticsView = () => {
   };
 
   const kpis = [
-    { label: 'Usuarios Registrados', value: '384', change: '+14% este mes', icon: Users, bg: 'bg-indigo-50', text: 'text-indigo-600', border: 'border-indigo-100/50' },
-    { label: 'Vehículos Verificados', value: '42', change: '8 de alta hoy', icon: Car, bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-100/50' },
-    { label: 'Rutas Publicadas', value: '1,248', change: '+24% vs semana ant.', icon: MapPin, bg: 'bg-violet-50', text: 'text-violet-600', border: 'border-violet-100/50' },
-    { label: 'Calificación Promedio', value: '4.91', change: 'Basado en 320 reviews', icon: Award, bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-100/50' },
+    { label: 'Usuarios Totales', value: loading ? '...' : String(stats.totalUsers), change: 'Total afiliados', icon: Users, bg: 'bg-indigo-50', text: 'text-indigo-600', border: 'border-indigo-100/50' },
+    { label: 'Conductores', value: loading ? '...' : String(stats.drivers), change: 'Conductores registrados', icon: Users, bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-100/50' },
+    { label: 'Pasajeros', value: loading ? '...' : String(stats.passengers), change: 'Pasajeros de la plataforma', icon: Users, bg: 'bg-sky-50', text: 'text-sky-600', border: 'border-sky-100/50' },
+    { label: 'Vehículos Registrados', value: loading ? '...' : String(stats.totalVehicles), change: 'Flota total autorizada', icon: Car, bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-100/50' },
+    { label: 'Vehículos Pendientes', value: loading ? '...' : String(stats.pendingVehicles), change: 'Revisión SOAT y placas', icon: Car, bg: 'bg-rose-50', text: 'text-rose-600', border: 'border-rose-100/50' },
+    { label: 'Rutas Activas', value: loading ? '...' : String(stats.activeRoutes), change: 'Rutas programadas o en curso', icon: MapPin, bg: 'bg-violet-50', text: 'text-violet-600', border: 'border-violet-100/50' },
+    { label: 'Rutas Completadas', value: loading ? '...' : String(stats.completedRoutes), change: 'Viajes finalizados con éxito', icon: MapPin, bg: 'bg-purple-50', text: 'text-purple-600', border: 'border-purple-100/50' },
+    { label: 'Calificación Promedio', value: loading ? '...' : stats.averageRating.toFixed(2), change: 'Evaluación general media', icon: Award, bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-100/50' },
   ];
 
   return (
@@ -50,7 +101,7 @@ const AdminAnalyticsView = () => {
       </header>
 
       {/* KPIs Grid */}
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+      <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
         {kpis.map((kpi, idx) => (
           <motion.div
             key={idx}
@@ -161,53 +212,30 @@ const AdminAnalyticsView = () => {
               <h3 className="text-base font-black text-slate-800 tracking-tight">Aprobación de Documentos</h3>
               <p className="text-xs text-slate-400 font-semibold">Estatus general de conductores corporativos</p>
             </div>
-            <div className="flex items-center gap-1.5 text-xs font-black text-emerald-600 bg-emerald-50 rounded-full px-2.5 py-1">
+            <div className="flex items-center gap-1.5 text-xs font-black text-amber-600 bg-amber-50 rounded-full px-2.5 py-1 uppercase tracking-wider">
               <Layers size={12} />
-              <span>92.4% Aprobados</span>
+              <span>S&C Pendiente</span>
             </div>
           </div>
 
-          <div className="space-y-4 py-2">
-            {/* Verification progress bar 1 */}
-            <div>
-              <div className="flex items-center justify-between text-xs font-bold mb-1">
-                <span className="text-slate-600">Certificación SOAT</span>
-                <span className="text-indigo-600">96% (324/336)</span>
-              </div>
-              <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-                <div className="h-full rounded-full bg-indigo-500" style={{ width: '96%' }} />
-              </div>
+          <div className="py-8 flex flex-col items-center justify-center text-center space-y-2 border border-dashed border-slate-150 rounded-2xl bg-slate-50/50">
+            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-450">
+              <FileText size={18} />
             </div>
-
-            {/* Verification progress bar 2 */}
-            <div>
-              <div className="flex items-center justify-between text-xs font-bold mb-1">
-                <span className="text-slate-600">Licencias de Conducir</span>
-                <span className="text-indigo-600">91% (305/336)</span>
-              </div>
-              <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-                <div className="h-full rounded-full bg-indigo-400" style={{ width: '91%' }} />
-              </div>
-            </div>
-
-            {/* Verification progress bar 3 */}
-            <div>
-              <div className="flex items-center justify-between text-xs font-bold mb-1">
-                <span className="text-slate-600">Revisión Tecnomecánica</span>
-                <span className="text-indigo-600">89% (299/336)</span>
-              </div>
-              <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-                <div className="h-full rounded-full bg-indigo-300" style={{ width: '89%' }} />
-              </div>
+            <div className="space-y-1 px-4">
+              <p className="text-xs font-black text-slate-700">Pendiente de implementación</p>
+              <p className="text-[11px] text-slate-400 font-bold leading-normal max-w-[240px] mx-auto">
+                Los indicadores de SOAT y Licencias automotrices requieren la vinculación de tablas documentales en futuras iteraciones.
+              </p>
             </div>
           </div>
 
-          <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 flex items-center gap-3 text-left mt-1.5">
+          <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 flex items-center gap-3 text-left mt-3">
             <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
               <Sparkles size={14} className="animate-pulse" />
             </div>
             <p className="text-xs font-medium text-slate-500 leading-normal">
-              <span className="font-extrabold text-slate-700">Optimización Automática:</span> El bot de Rivo avisa 15 días antes del vencimiento técnico corporativo.
+              <span className="font-extrabold text-slate-700">Optimización Automática:</span> El bot de Rivo avisará 15 días antes del vencimiento técnico corporativo una vez habilitado.
             </p>
           </div>
         </motion.section>

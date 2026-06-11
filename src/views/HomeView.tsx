@@ -1,10 +1,9 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { useAppStore } from '../hooks/useAppStore';
 import { UserRole } from '../shared/enums';
 import { HomePassengerView } from './HomePassengerView';
 import { HomeDriverView } from './HomeDriverView';
-import { HomeAdminView } from './HomeAdminView';
 
 /**
  * Rivo Home Page Router View (Premium Decoupled Architecture)
@@ -51,10 +50,7 @@ const HomeView = () => {
           picoPlaca={picoPlaca} 
         />
       ) : user.role === UserRole.ADMIN ? (
-        <HomeAdminView 
-          user={user} 
-          navigate={navigate} 
-        />
+        <Navigate to="/admin/operation" replace />
       ) : (
         <HomePassengerView 
           user={user} 

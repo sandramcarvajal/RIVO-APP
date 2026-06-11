@@ -137,3 +137,33 @@ export const notifications = pgTable("notifications", {
     userIdIsReadIdx: index("notifications_user_id_is_read_idx").on(table.userId, table.isRead),
   };
 });
+
+export const reports = pgTable("reports", {
+  id: serial("id").primaryKey(),
+  reporterId: integer("reporter_id").references(() => users.id).notNull(),
+  reportedUserId: integer("reported_user_id").references(() => users.id).notNull(),
+  reason: text("reason").notNull(),
+  description: text("description").notNull(),
+  status: text("status").notNull().default('pending'), // pending, reviewing, resolved, dismissed
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+}, (table) => {
+  return {
+    reporterIdIdx: index("reports_reporter_id_idx").on(table.reporterId),
+    reportedUserIdIdx: index("reports_reported_user_id_idx").on(table.reportedUserId),
+  };
+});
+
+export const adminLogs = pgTable("admin_logs", {
+  id: serial("id").primaryKey(),
+  adminId: integer("admin_id").references(() => users.id).notNull(),
+  action: text("action").notNull(), // vehicle_approved, vehicle_rejected, user_suspended, user_activated, document_approved, document_rejected
+  targetId: text("target_id").notNull(),
+  details: text("details").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => {
+  return {
+    adminIdIdx: index("admin_logs_admin_id_idx").on(table.adminId),
+  };
+});
+

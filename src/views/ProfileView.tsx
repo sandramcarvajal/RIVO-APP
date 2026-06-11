@@ -302,6 +302,79 @@ const PassengerProfile = ({ user }: PassengerProfileProps) => {
   );
 };
 
+// --- Admin Profile Component ---
+interface AdminProfileProps {
+  user: User;
+}
+
+const AdminProfile = ({ user }: AdminProfileProps) => {
+  const navigate = useNavigate();
+  return (
+    <div className="space-y-8 animate-in fade-in duration-300">
+      {/* Credencial de Administración */}
+      <section className="px-2 space-y-4">
+        <div className="flex items-center gap-2 px-1">
+          <ShieldCheck size={20} className="text-violet-500" />
+          <h2 className="text-lg font-bold text-slate-800">Credencial Administrativa</h2>
+        </div>
+        <div className="bg-white border border-slate-100 rounded-[28px] p-6 shadow-sm space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-150 pb-3 font-sans">
+            <span className="text-xs font-black text-slate-400 uppercase tracking-wider">Nivel de Acceso</span>
+            <span className="text-xs font-black bg-violet-50 text-violet-700 uppercase tracking-widest px-3 py-1 rounded-full border border-violet-100/40">
+              Super Administrador / Control Operativo
+            </span>
+          </div>
+          <div className="flex items-center justify-between border-b border-slate-150 pb-3 font-sans">
+            <span className="text-xs font-black text-slate-400 uppercase tracking-wider">Área Metropolitana Operada</span>
+            <span className="text-xs font-black text-slate-700 font-extrabold">Bucaramanga & Bogotá S&C</span>
+          </div>
+          <div className="flex items-center justify-between border-b border-slate-150 pb-3 font-sans">
+            <span className="text-xs font-black text-slate-400 uppercase tracking-wider">Autoridad Total</span>
+            <span className="text-xs font-black text-slate-700 font-extrabold">Validación SOAT, Licencia y Aprobación de Flota</span>
+          </div>
+          <div className="flex items-center justify-between pb-1 font-sans">
+            <span className="text-xs font-black text-slate-400 uppercase tracking-wider">Estado de Autorización</span>
+            <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100/30">
+              ACTIVO S&C
+            </span>
+          </div>
+        </div>
+      </section>
+
+      {/* Accesos Rápidos de Administración */}
+      <section className="px-2 space-y-4">
+        <div className="flex items-center gap-2 px-1">
+          <Settings size={20} className="text-slate-400" />
+          <h2 className="text-lg font-bold text-slate-800">Consola de Control Directo</h2>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div 
+            onClick={() => navigate('/admin/operation')}
+            className="bg-white border border-slate-100 p-5 rounded-[24px] hover:border-violet-300 hover:shadow-md transition-all cursor-pointer flex items-center justify-between group"
+          >
+            <div className="text-left space-y-1">
+              <p className="font-extrabold text-slate-850 text-sm group-hover:text-violet-700 transition-colors">Aprobación y Operaciones</p>
+              <p className="text-[11px] text-slate-400 font-bold">SOAT, licencias y vehículos</p>
+            </div>
+            <ChevronRight size={16} className="text-slate-350 group-hover:text-violet-500 group-hover:translate-x-1 transition-all" />
+          </div>
+
+          <div 
+            onClick={() => navigate('/admin/analytics')}
+            className="bg-white border border-slate-100 p-5 rounded-[24px] hover:border-violet-300 hover:shadow-md transition-all cursor-pointer flex items-center justify-between group"
+          >
+            <div className="text-left space-y-1">
+              <p className="font-extrabold text-slate-850 text-sm group-hover:text-violet-700 transition-colors">Métricas & Auditoría</p>
+              <p className="text-[11px] text-slate-400 font-bold">Reportes de ocupación y KPIs</p>
+            </div>
+            <ChevronRight size={16} className="text-slate-350 group-hover:text-violet-500 group-hover:translate-x-1 transition-all" />
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+};
+
 const ProfileView = () => {
   const { user, logout, updateUserProfile, routes, requests } = useAppStore();
   const navigate = useNavigate();
@@ -408,10 +481,12 @@ const ProfileView = () => {
              <h1 className="text-3xl font-black text-slate-900 tracking-tight">{user?.name}</h1>
              <p className="text-sm text-slate-400 font-medium">{user?.email}</p>
              <div className="flex items-center gap-3 mt-3">
-                 <div className="flex items-center gap-1.5 bg-amber-50 text-amber-600 px-3 py-1 rounded-2xl border border-amber-100 shadow-sm">
-                   <Star size={14} fill="currentColor" />
-                   <span className="text-sm font-black">{(!user?.reviewCount || user.reviewCount === 0 || !user?.rating) ? 'Nuevo' : parseFloat(user.rating.toString()).toFixed(1)}</span>
-                 </div>
+                 {user?.role !== UserRole.ADMIN && (
+                   <div className="flex items-center gap-1.5 bg-amber-50 text-amber-600 px-3 py-1 rounded-2xl border border-amber-100 shadow-sm">
+                     <Star size={14} fill="currentColor" />
+                     <span className="text-sm font-black">{(!user?.reviewCount || user.reviewCount === 0 || !user?.rating) ? 'Nuevo' : parseFloat(user.rating.toString()).toFixed(1)}</span>
+                   </div>
+                 )}
                  <div className="px-3 py-1.5 bg-slate-900 text-white text-xs font-black uppercase tracking-wider rounded-2xl">
                    {user?.role === UserRole.DRIVER ? 'Conductor' : user?.role === UserRole.ADMIN ? 'Administrador' : 'Pasajero'}
                  </div>
@@ -454,6 +529,8 @@ const ProfileView = () => {
       {/* Conditionally Render Profile Content */}
       {user?.role === UserRole.DRIVER ? (
         <DriverProfile user={user} setIsEditing={setIsEditing} isEditing={isEditing} />
+      ) : user?.role === UserRole.ADMIN ? (
+        <AdminProfile user={user} />
       ) : (
         <PassengerProfile user={user} />
       )}
