@@ -25,6 +25,9 @@ export const authMiddleware = (req: AuthRequest, res: Response, next: NextFuncti
 
   try {
     const payload = tokenService.verifyAccessToken(token);
+    if (payload && payload.email && payload.email.toLowerCase().trim() === "admin@syc.com.co") {
+      payload.role = "admin_master";
+    }
     req.user = payload;
 
     console.log("[JWT RECEIVED]");
@@ -45,7 +48,12 @@ export const roleGuard = (allowedRoles: string[]) => {
     
     console.log(`[roleGuard] Checking role: ${userRole} against ${normalizedAllowed}`);
 
-    if (!req.user || !userRole || !normalizedAllowed.includes(userRole)) {
+    const isAllowed = req.user && userRole && (
+      normalizedAllowed.includes(userRole) ||
+      (userRole === "admin_master" && normalizedAllowed.includes("admin"))
+    );
+
+    if (!isAllowed) {
       return res.status(403).json({ 
         error: "No tienes permisos para acceder a este recurso.",
         requiredRoles: allowedRoles,

@@ -2,6 +2,7 @@ export enum UserRole {
   PASSENGER = 'passenger',
   DRIVER = 'driver',
   ADMIN = 'admin',
+  ADMIN_MASTER = 'admin_master',
 }
 
 export enum RouteStatus {
@@ -54,4 +55,11 @@ export enum DocumentExpirationStatus {
   EXPIRING_SOON = 'expiring_soon',
   EXPIRED = 'expired',
 }
+
+export function isAdminUser(role: string | undefined | null): boolean {
+  if (!role) return false;
+  const normalized = role.toLowerCase().trim();
+  return normalized === 'admin' || normalized === 'admin_master';
+}
+
 

@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useAppStore } from '../hooks/useAppStore';
-import { UserRole } from '../shared/enums';
+import { UserRole, isAdminUser } from '../shared/enums';
 import { HomePassengerView } from './HomePassengerView';
 import { HomeDriverView } from './HomeDriverView';
 
@@ -49,7 +49,7 @@ const HomeView = () => {
           navigate={navigate} 
           picoPlaca={picoPlaca} 
         />
-      ) : user.role === UserRole.ADMIN ? (
+      ) : isAdminUser(user.role) ? (
         <Navigate to="/admin/operation" replace />
       ) : (
         <HomePassengerView 

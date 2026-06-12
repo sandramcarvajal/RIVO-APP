@@ -20,7 +20,7 @@ import {
   MessageSquare
 } from 'lucide-react';
 import { useAppStore } from '../hooks/useAppStore';
-import { UserRole } from '../shared/enums';
+import { UserRole, isAdminUser } from '../shared/enums';
 import { cn } from '../lib/utils';
 
 interface FAQ {
@@ -55,6 +55,7 @@ export default function HelpView() {
             answer: 'Al programar o crear una ruta, nuestro verificador automático cruzará tu placa registrada con las restricciones del municipio correspondientes a la fecha seleccionada. El sistema te alertará proactivamente antes de publicar una ruta con restricción activa.'
           }
         ];
+      case 'admin_master':
       case UserRole.ADMIN:
         return [
           {
@@ -154,7 +155,7 @@ export default function HelpView() {
             <div className="flex items-center gap-2">
               <span className="text-base font-bold text-slate-900">Preguntas Frecuentes</span>
               <span className="px-2 py-0.5 bg-violet-50 text-violet-700 text-[10px] font-black uppercase tracking-wider rounded-lg border border-violet-100">
-                {user?.role === UserRole.DRIVER ? 'Conductor' : user?.role === UserRole.ADMIN ? 'Administrador' : 'Pasajero'}
+                {user?.role === UserRole.DRIVER ? 'Conductor' : isAdminUser(user?.role) ? 'Administrador' : 'Pasajero'}
               </span>
             </div>
           </div>

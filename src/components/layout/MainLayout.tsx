@@ -7,6 +7,7 @@ import { useAppStore } from '../../hooks/useAppStore';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import { useToast } from '../ui/Toast';
+import { isAdminUser } from '../../shared/enums';
 
 const MainLayout = () => {
   const { user, notifications, logout, updateUserProfile } = useAppStore();
@@ -58,7 +59,7 @@ const MainLayout = () => {
   console.log(`[UNREAD_COUNT] Calculated unreadCount: ${unreadCount} total unread out of ${notifications.length} notifications`);
 
   let filteredNav;
-  if (user?.role === 'admin') {
+  if (user && isAdminUser(user?.role)) {
     filteredNav = [
       { icon: ClipboardList, label: 'Operación', path: '/admin/operation' },
       { icon: BarChart3, label: 'Analítica', path: '/admin/analytics' },
@@ -95,7 +96,7 @@ const MainLayout = () => {
 
         {/* Mobile Top Bar */}
         <header className="flex items-center justify-between p-4.5 bg-white/95 backdrop-blur-md sticky top-0 z-30 border-b border-slate-100/60">
-          <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => navigate(user?.role === 'admin' ? '/admin/operation' : '/')}>
+          <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => navigate(user && isAdminUser(user.role) ? '/admin/operation' : '/')}>
             <img 
               src="/logo_rivo.svg" 
               alt="Rivo Logo" 

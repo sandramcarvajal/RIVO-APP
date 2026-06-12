@@ -1,9 +1,10 @@
 import { Router } from "express";
+import bcrypt from "bcryptjs";
 import { CreateRouteUseCase } from "../application/CreateRoute";
 import { SearchRoutesUseCase } from "../application/SearchRoutes";
 import { DrizzleRouteRepository } from "./DrizzleRouteRepository";
 import { db } from "../../../../db";
-import { routes, joinRequests, users, vehicles, vehicleDocuments, userDocuments, ratings, reports, adminLogs } from "../../../../db/schema";
+import { routes, joinRequests, users, vehicles, vehicleDocuments, userDocuments, ratings, reports, adminLogs, notifications } from "../../../../db/schema";
 import { eq, and, or, sql } from "drizzle-orm";
 import { authMiddleware, roleGuard, AuthRequest } from "../../auth/infrastructure/AuthMiddleware";
 import { RouteStatus, NotificationType } from "../../../../shared/enums";
@@ -13,6 +14,90 @@ import { CheckCirculationUseCase } from "../../circulation/application/CheckCirc
 import { RouteLifecycleManager } from "./RouteLifecycleManager";
 
 const routeRouter = Router();
+
+// --- SPRINT 8.2B: Document Compliance Helpers ---
+function getComplianceStatus(expirationDate: Date | null | undefined): 'AL_DIA' | 'VENCE_EN_30_DIAS' | 'VENCE_EN_15_DIAS' | 'VENCIDO' {
+  if (!expirationDate) return 'AL_DIA';
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const exp = new Date(expirationDate);
+  exp.setHours(0, 0, 0, 0);
+
+  const diffTime = exp.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) {
+    return 'VENCIDO';
+  } else if (diffDays <= 15) {
+    return 'VENCE_EN_15_DIAS';
+  } else if (diffDays <= 30) {
+    return 'VENCE_EN_30_DIAS';
+  } else {
+    return 'AL_DIA';
+  }
+}
+
+async function checkAndGenerateDocumentNotifications(
+  database: any, 
+  userId: number, 
+  docId: number, 
+  sourceType: string, 
+  docType: string, 
+  complianceStatus: 'AL_DIA' | 'VENCE_EN_30_DIAS' | 'VENCE_EN_15_DIAS' | 'VENCIDO',
+  docName: string
+) {
+  if (complianceStatus === 'AL_DIA' || !userId) return;
+
+  let alertType = '';
+  let alertTitle = '';
+  let alertDesc = '';
+
+  if (complianceStatus === 'VENCE_EN_30_DIAS') {
+    alertType = `DOC_ALERT_30_${sourceType}_${docId}`;
+    alertTitle = `⚠️ Documento por vencer (30 días)`;
+    alertDesc = `El documento "${docName}" vencerá en menos de 30 días. Por favor, prepárate para renovarlo.`;
+  } else if (complianceStatus === 'VENCE_EN_15_DIAS') {
+    alertType = `DOC_ALERT_15_${sourceType}_${docId}`;
+    alertTitle = `🚨 Documento vencerá pronto (15 días)`;
+    alertDesc = `El documento "${docName}" vencerá en menos de 15 días. Es urgente realizar la renovación.`;
+  } else if (complianceStatus === 'VENCIDO') {
+    alertType = `DOC_ALERT_VENCIDO_${sourceType}_${docId}`;
+    alertTitle = `❌ Documento Vencido`;
+    alertDesc = `El documento "${docName}" se encuentra actualmente vencido. Actualízalo para evitar restricciones manuales de administración.`;
+  }
+
+  try {
+    const existing = await database
+      .select()
+      .from(notifications)
+      .where(and(
+        eq(notifications.userId, userId),
+        eq(notifications.type, alertType)
+      ));
+
+    if (existing.length === 0) {
+      await database.insert(notifications).values({
+        userId,
+        title: alertTitle,
+        description: alertDesc,
+        type: alertType,
+        data: JSON.stringify({
+          docId,
+          sourceType,
+          docType,
+          docName,
+          complianceStatus,
+          notifiedAt: new Date()
+        }),
+        isRead: false,
+        createdAt: new Date()
+      });
+      console.log(`[ComplianceNotification] Created notification for user ${userId}, document ${docId} (${complianceStatus})`);
+    }
+  } catch (err) {
+    console.error("[ComplianceNotification] Error checking/generating compliance notification:", err);
+  }
+}
 const notificationRepository = new DrizzleNotificationRepository();
 
 const routeRepository = new DrizzleRouteRepository();
@@ -432,6 +517,76 @@ routeRouter.post("/", authMiddleware, async (req: AuthRequest, res) => {
   routeRouter.post("/:id/status", authMiddleware, roleGuard(['driver', 'admin']), handleUpdateStatus);
   routeRouter.post("/:id/state", authMiddleware, roleGuard(['driver', 'admin']), handleUpdateStatus);
 
+routeRouter.get("/admin/profile/executive", authMiddleware, roleGuard(['admin']), async (req: AuthRequest, res) => {
+  try {
+    const adminId = parseInt((req as any).user!.userId);
+    console.log(`[RouteRouter] GET /admin/profile/executive - Compiling metrics for Admin ID: ${adminId}`);
+    
+    // Fetch this administrator's profile information
+    const [adminUser] = await db.select().from(users).where(eq(users.id, adminId)).limit(1);
+    if (!adminUser) {
+      return res.status(404).json({ error: "Administrador no encontrado" });
+    }
+
+    // Fetch administrative logs for this administrator
+    const personalLogs = await db.select().from(adminLogs).where(eq(adminLogs.adminId, adminId));
+
+    // Calculate indicators dynamically based on real adminLogs
+    const vehiclesApproved = personalLogs.filter(l => l.action === "vehicle_approved").length;
+    const vehiclesRejected = personalLogs.filter(l => l.action === "vehicle_rejected").length;
+    const reportsManaged = personalLogs.filter(l => l.action === "report_resolved" || l.action === "report_updated" || l.action === "report_dismissed").length;
+    const usersSuspended = personalLogs.filter(l => l.action === "user_suspended").length;
+    const usersReactivated = personalLogs.filter(l => l.action === "user_activated").length;
+
+    // Last access/activity: get the most recent log timestamp or default to user creation
+    let lastAccess = adminUser.createdAt;
+    if (personalLogs.length > 0) {
+      const timestamps = personalLogs.map(l => l.createdAt ? new Date(l.createdAt).getTime() : 0);
+      const maxTime = Math.max(...timestamps);
+      if (maxTime > 0) {
+        lastAccess = new Date(maxTime);
+      }
+    }
+
+    // Sort logs descending to show newest first as high fidelity timeline activity
+    const sortedLogs = [...personalLogs].sort((a, b) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return dateB - dateA;
+    });
+
+    const timeline = sortedLogs.slice(0, 15).map(l => ({
+      id: l.id.toString(),
+      action: l.action,
+      details: l.details,
+      createdAt: l.createdAt
+    }));
+
+    res.json({
+      adminInfo: {
+        id: adminUser.id,
+        email: adminUser.email,
+        createdAt: adminUser.createdAt,
+        lastAccess,
+        status: "Activo",
+        role: adminUser.role,
+        profileData: adminUser.profileData ? JSON.parse(adminUser.profileData) : null
+      },
+      indicators: {
+        vehiclesApproved,
+        vehiclesRejected,
+        reportsManaged,
+        usersSuspended,
+        usersReactivated
+      },
+      timeline
+    });
+  } catch (err: any) {
+    console.error("[RouteRouter] Error compiling executive admin profile stats:", err);
+    res.status(500).json({ error: "Error al compilar el perfil ejecutivo administrativo." });
+  }
+});
+
 routeRouter.get("/admin/analytics/stats", authMiddleware, roleGuard(['admin']), async (req: AuthRequest, res) => {
   try {
     console.log("[RouteRouter] GET /admin/analytics/stats - Fetching real stats...");
@@ -608,6 +763,161 @@ routeRouter.get("/admin/analytics/stats", authMiddleware, roleGuard(['admin']), 
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       .slice(0, 10);
 
+    // Sprint 8.2B: Document Risk Index Calculations
+    const allUserDocs = await db.select().from(userDocuments);
+    const allVehicleDocs = await db.select().from(vehicleDocuments);
+
+    const docMetrics = {
+      alDia: 0,
+      vence_30: 0,
+      vence_15: 0,
+      vencido: 0,
+    };
+
+    allUserDocs.forEach(d => {
+      const status = getComplianceStatus(d.expirationDate);
+      if (status === 'AL_DIA') docMetrics.alDia++;
+      else if (status === 'VENCE_EN_30_DIAS') docMetrics.vence_30++;
+      else if (status === 'VENCE_EN_15_DIAS') docMetrics.vence_15++;
+      else if (status === 'VENCIDO') docMetrics.vencido++;
+    });
+
+    allVehicleDocs.forEach(d => {
+      const status = getComplianceStatus(d.expirationDate);
+      if (status === 'AL_DIA') docMetrics.alDia++;
+      else if (status === 'VENCE_EN_30_DIAS') docMetrics.vence_30++;
+      else if (status === 'VENCE_EN_15_DIAS') docMetrics.vence_15++;
+      else if (status === 'VENCIDO') docMetrics.vencido++;
+    });
+
+    const totalDocs = allUserDocs.length + allVehicleDocs.length;
+    const documentRiskIndex = {
+      totalDocs,
+      percentAlDia: totalDocs > 0 ? Math.round((docMetrics.alDia / totalDocs) * 100) : 100,
+      percentProxVencer: totalDocs > 0 ? Math.round(((docMetrics.vence_15 + docMetrics.vence_30) / totalDocs) * 100) : 0,
+      percentVencido: totalDocs > 0 ? Math.round((docMetrics.vencido / totalDocs) * 100) : 0,
+      counts: docMetrics
+    };
+
+    // Generate last 6 months dynamically to prevent hardcoded dates/issues
+    const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    const trendMonths: { name: string; year: number; monthIndex: number; label: string }[] = [];
+    const todayDate = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(todayDate.getFullYear(), todayDate.getMonth() - i, 1);
+      const mIdx = d.getMonth();
+      const yr = d.getFullYear();
+      trendMonths.push({
+        name: monthNames[mIdx],
+        year: yr,
+        monthIndex: mIdx,
+        label: `${monthNames[mIdx]} ${yr}`
+      });
+    }
+
+    // 1. User & Vehicle growth trends
+    const growthTrend = trendMonths.map(tm => {
+      const usersCreated = allUsers.filter(u => {
+        const d = u.createdAt ? new Date(u.createdAt) : new Date();
+        return d.getMonth() === tm.monthIndex && d.getFullYear() === tm.year;
+      }).length;
+
+      const driversCreated = allUsers.filter(u => {
+        const d = u.createdAt ? new Date(u.createdAt) : new Date();
+        return (u.role?.toLowerCase() === 'driver' || u.role?.toLowerCase() === 'admin_driver') && d.getMonth() === tm.monthIndex && d.getFullYear() === tm.year;
+      }).length;
+
+      const passengersCreated = allUsers.filter(u => {
+        const d = u.createdAt ? new Date(u.createdAt) : new Date();
+        return u.role?.toLowerCase() === 'passenger' && d.getMonth() === tm.monthIndex && d.getFullYear() === tm.year;
+      }).length;
+
+      const vehiclesCreated = allVehicles.filter(v => {
+        const d = v.createdAt ? new Date(v.createdAt) : new Date();
+        return d.getMonth() === tm.monthIndex && d.getFullYear() === tm.year;
+      }).length;
+
+      const cumulativeUsers = allUsers.filter(u => {
+        const d = u.createdAt ? new Date(u.createdAt) : new Date();
+        return d.getTime() <= new Date(tm.year, tm.monthIndex + 1, 0, 23, 59, 59).getTime();
+      }).length;
+
+      const cumulativeVehicles = allVehicles.filter(v => {
+        const d = v.createdAt ? new Date(v.createdAt) : new Date();
+        return d.getTime() <= new Date(tm.year, tm.monthIndex + 1, 0, 23, 59, 59).getTime();
+      }).length;
+
+      return {
+        month: tm.label,
+        users: usersCreated,
+        drivers: driversCreated,
+        passengers: passengersCreated,
+        vehicles: vehiclesCreated,
+        cumulativeUsers,
+        cumulativeVehicles
+      };
+    });
+
+    // 2. Routes & Passengers trends
+    const routesTrend = trendMonths.map(tm => {
+      const created = allRoutes.filter(r => {
+        const d = r.createdAt ? new Date(r.createdAt) : new Date();
+        return d.getMonth() === tm.monthIndex && d.getFullYear() === tm.year;
+      }).length;
+
+      const completed = allRoutes.filter(r => {
+        const d = r.createdAt ? new Date(r.createdAt) : new Date();
+        return r.status?.toLowerCase() === 'completed' && d.getMonth() === tm.monthIndex && d.getFullYear() === tm.year;
+      }).length;
+
+      const requests = allRequests.filter(req => {
+        const d = req.createdAt ? new Date(req.createdAt) : new Date();
+        return d.getMonth() === tm.monthIndex && d.getFullYear() === tm.year;
+      }).length;
+
+      const requestsApproved = allRequests.filter(req => {
+        const d = req.createdAt ? new Date(req.createdAt) : new Date();
+        const stat = req.status?.toLowerCase();
+        return (stat === 'accepted' || stat === 'approved') && d.getMonth() === tm.monthIndex && d.getFullYear() === tm.year;
+      }).length;
+
+      return {
+        month: tm.label,
+        created,
+        completed,
+        requests,
+        requestsApproved,
+        adoptionRate: created > 0 ? Math.round((completed / created) * 100) : 0
+      };
+    });
+
+    // 3. Moderation & Governance metrics from database
+    const allReports = await db.select().from(reports);
+    const totalReports = allReports.length;
+    const pendingReports = allReports.filter(r => r.status?.toLowerCase() === 'pending').length;
+    const resolvedReports = allReports.filter(r => r.status?.toLowerCase() === 'resolved').length;
+    
+    const allLogs = await db.select().from(adminLogs);
+    const totalAdminActions = allLogs.length;
+
+    const moderationTrend = trendMonths.map(tm => {
+      const reportsCount = allReports.filter(r => {
+        const d = r.createdAt ? new Date(r.createdAt) : new Date();
+        return d.getMonth() === tm.monthIndex && d.getFullYear() === tm.year;
+      }).length;
+
+      const actionsCount = allLogs.filter(l => {
+        const d = l.createdAt ? new Date(l.createdAt) : new Date();
+        return d.getMonth() === tm.monthIndex && d.getFullYear() === tm.year;
+      }).length;
+
+      return {
+        month: tm.label,
+        reports: reportsCount,
+        actions: actionsCount
+      };
+    });
+
     console.log("[RouteRouter] Admin analytics stats and Sprint 3 recent activity computed successfully!");
     res.json({
       totalUsers,
@@ -618,7 +928,17 @@ routeRouter.get("/admin/analytics/stats", authMiddleware, roleGuard(['admin']), 
       activeRoutes,
       completedRoutes,
       averageRating,
-      recentActivity
+      recentActivity,
+      documentRiskIndex,
+      growthTrend,
+      routesTrend,
+      moderationTrend,
+      moderationSummary: {
+        totalReports,
+        pendingReports,
+        resolvedReports,
+        totalAdminActions
+      }
     });
   } catch (err: any) {
     console.error("[RouteRouter] Error compiling admin analytics stats:", err);
@@ -798,8 +1118,15 @@ routeRouter.get("/:id", authMiddleware, async (req: AuthRequest, res) => {
 });
 
 // ==========================================
-// SPRINT 4 - ADMIN OPERATIONS REAL BACKEND
+// SPRINT 8.6 - GESTIÓN DE USUARIOS Y ROLES (ADMIN MASTER & ADMIN)
 // ==========================================
+
+// Helper to determine if a caller is ADMIN_MASTER (role === 'admin_master' or email === 'admin@syc.com.co')
+const isCallerAdminMaster = (req: any): boolean => {
+  const callerEmail = req.user?.email?.toLowerCase().trim();
+  const callerRole = req.user?.role?.toLowerCase();
+  return callerEmail === "admin@syc.com.co" || callerRole === "admin_master";
+};
 
 // 1. Get all users
 routeRouter.get("/admin/users/all", authMiddleware, roleGuard(['admin']), async (req, res) => {
@@ -817,10 +1144,13 @@ routeRouter.get("/admin/users/all", authMiddleware, roleGuard(['admin']), async 
           isDisabled = !!prof.isDisabled;
         } catch (_) {}
       }
+      
+      const mappedRole = u.email.toLowerCase().trim() === "admin@syc.com.co" ? "admin_master" : u.role;
+
       return {
         id: u.id.toString(),
         email: u.email,
-        role: u.role,
+        role: mappedRole,
         rating: u.rating,
         reviewCount: u.reviewCount,
         createdAt: u.createdAt,
@@ -835,13 +1165,198 @@ routeRouter.get("/admin/users/all", authMiddleware, roleGuard(['admin']), async 
   }
 });
 
-// 2. Toggle user active/blocked status safely within profileData JSON (without DB structural changes)
-routeRouter.patch("/admin/users/:id/toggle-status", authMiddleware, roleGuard(['admin']), async (req, res) => {
+// 2. Create User
+routeRouter.post("/admin/users/create", authMiddleware, roleGuard(['admin']), async (req, res) => {
   try {
+    const isMaster = isCallerAdminMaster(req);
+    const { email, password, displayName, phone, role } = req.body;
+
+    if (!email || !password || !role) {
+      return res.status(400).json({ error: "Faltan campos obligatorios: email, password y rol son requeridos." });
+    }
+
+    const targetEmail = email.toLowerCase().trim();
+
+    if (!targetEmail.endsWith("@syc.com.co")) {
+      return res.status(400).json({ error: "Solo se permiten correos corporativos @syc.com.co" });
+    }
+
+    // Standard ADMIN cannot create administrators (admin or admin_master) or admin@syc.com.co
+    if (!isMaster) {
+      if (role === "admin" || role === "admin_master" || targetEmail === "admin@syc.com.co") {
+        return res.status(403).json({ error: "No tienes permisos de ADMIN_MASTER para crear administradores." });
+      }
+    }
+
+    // Check if email already taken
+    const [existing] = await db.select().from(users).where(eq(users.email, targetEmail)).limit(1);
+    if (existing) {
+      return res.status(400).json({ error: "El correo electrónico ya se encuentra registrado." });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 12);
+    const profileObj = {
+      name: displayName || targetEmail.split("@")[0],
+      phone: phone || "",
+      isDisabled: false
+    };
+
+    const [created] = await db.insert(users).values({
+      email: targetEmail,
+      password: hashedPassword,
+      role: role,
+      profileData: JSON.stringify(profileObj)
+    }).returning();
+
+    // Audit Logging
+    const adminId = parseInt((req as any).user!.userId);
+    await db.insert(adminLogs).values({
+      adminId,
+      action: "user_created",
+      targetId: created.id.toString(),
+      details: `Usuario ${targetEmail} creado con rol ${role} por el administrador ID ${adminId}.`
+    });
+
+    res.status(201).json({
+      success: true,
+      user: {
+        id: created.id.toString(),
+        email: created.email,
+        role: created.role,
+        displayName: profileObj.name,
+        phone: profileObj.phone,
+        isDisabled: false
+      }
+    });
+  } catch (err: any) {
+    console.error("[RouteRouter] Error creating admin user:", err);
+    res.status(500).json({ error: "Error interno al crear el usuario." });
+  }
+});
+
+// 3. Edit User
+routeRouter.patch("/admin/users/:id/edit", authMiddleware, roleGuard(['admin']), async (req, res) => {
+  try {
+    const isMaster = isCallerAdminMaster(req);
     const userId = parseInt(req.params.id);
     const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
     if (!user) {
       return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+
+    const targetUserRole = user.role;
+    const targetUserEmail = user.email.toLowerCase().trim();
+
+    // Standard ADMIN restrictions
+    if (!isMaster) {
+      // Cannot edit administrators
+      if (targetUserRole === "admin" || targetUserRole === "admin_master" || targetUserEmail === "admin@syc.com.co") {
+        return res.status(403).json({ error: "No tienes permisos de ADMIN_MASTER para editar administradores." });
+      }
+    }
+
+    const { email, password, displayName, phone, role } = req.body;
+
+    // Standard ADMIN cannot change role to an administrative role
+    if (!isMaster && role && (role === "admin" || role === "admin_master")) {
+      return res.status(403).json({ error: "No tienes permisos de ADMIN_MASTER para asignar roles administrativos." });
+    }
+
+    let profileObj: any = {};
+    if (user.profileData) {
+      try {
+        profileObj = JSON.parse(user.profileData);
+      } catch (_) {}
+    }
+
+    if (displayName !== undefined) {
+      profileObj.name = displayName;
+    }
+    if (phone !== undefined) {
+      profileObj.phone = phone;
+    }
+
+    const updateFields: any = {
+      profileData: JSON.stringify(profileObj)
+    };
+
+    if (email !== undefined) {
+      const newEmail = email.toLowerCase().trim();
+      if (!newEmail.endsWith("@syc.com.co")) {
+        return res.status(400).json({ error: "Solo se permiten correos corporativos @syc.com.co" });
+      }
+      if (newEmail !== targetUserEmail) {
+        // Enforce admin@syc.com.co modification rule
+        if (!isMaster && targetUserEmail === "admin@syc.com.co") {
+          return res.status(403).json({ error: "No se puede modificar la cuenta admin@syc.com.co" });
+        }
+        const [existing] = await db.select().from(users).where(eq(users.email, newEmail)).limit(1);
+        if (existing) {
+          return res.status(400).json({ error: "El correo electrónico ya está registrado por otro usuario." });
+        }
+        updateFields.email = newEmail;
+      }
+    }
+
+    if (password !== undefined && password.trim() !== "") {
+      updateFields.password = await bcrypt.hash(password, 12);
+    }
+
+    if (role !== undefined) {
+      updateFields.role = role;
+    }
+
+    const [updatedUser] = await db
+      .update(users)
+      .set(updateFields)
+      .where(eq(users.id, userId))
+      .returning();
+
+    // Audit Logging
+    const adminId = parseInt((req as any).user!.userId);
+    await db.insert(adminLogs).values({
+      adminId,
+      action: "user_edited",
+      targetId: userId.toString(),
+      details: `Usuario ${targetUserEmail} editado por el administrador ID ${adminId}. Cambios: ${Object.keys(updateFields).join(", ")}`
+    });
+
+    res.json({
+      success: true,
+      user: {
+        id: updatedUser.id.toString(),
+        email: updatedUser.email,
+        role: updatedUser.role,
+        displayName: profileObj.name || "",
+        phone: profileObj.phone || "",
+        isDisabled: !!profileObj.isDisabled
+      }
+    });
+  } catch (err: any) {
+    console.error("[RouteRouter] Error editing user:", err);
+    res.status(500).json({ error: "Error al actualizar información del usuario." });
+  }
+});
+
+// 4. Toggle user active/blocked status safely within profileData JSON
+routeRouter.patch("/admin/users/:id/toggle-status", authMiddleware, roleGuard(['admin']), async (req, res) => {
+  try {
+    const isMaster = isCallerAdminMaster(req);
+    const userId = parseInt(req.params.id);
+    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (!user) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+
+    const targetUserRole = user.role;
+    const targetUserEmail = user.email.toLowerCase().trim();
+
+    // Standard ADMIN restrictions
+    if (!isMaster) {
+      // Cannot suspend administrators
+      if (targetUserRole === "admin" || targetUserRole === "admin_master" || targetUserEmail === "admin@syc.com.co") {
+        return res.status(403).json({ error: "No tienes permisos de ADMIN_MASTER para suspender o reactivar administradores." });
+      }
     }
     
     let profileObj: any = {};
@@ -870,7 +1385,7 @@ routeRouter.patch("/admin/users/:id/toggle-status", authMiddleware, roleGuard(['
       adminId,
       action: profileObj.isDisabled ? "user_suspended" : "user_activated",
       targetId: userId.toString(),
-      details: `Usuario ${user.email} fue ${profileObj.isDisabled ? "suspendido" : "reactivado"} por el Administrador.`
+      details: `Usuario ${user.email} fue ${profileObj.isDisabled ? "suspendido" : "reactivado"} por el administrador ID ${adminId}.`
     });
       
     res.json({
@@ -878,7 +1393,7 @@ routeRouter.patch("/admin/users/:id/toggle-status", authMiddleware, roleGuard(['
       user: {
         id: updatedUser.id.toString(),
         email: updatedUser.email,
-        role: updatedUser.role,
+        role: targetUserEmail === "admin@syc.com.co" ? "admin_master" : updatedUser.role,
         displayName: profileObj.name || "",
         phone: profileObj.phone || "",
         isDisabled: !!profileObj.isDisabled
@@ -1018,6 +1533,18 @@ routeRouter.get("/admin/documents/all", authMiddleware, roleGuard(['admin']), as
           ownerName = prof.name || "";
         } catch (_) {}
       }
+
+      const complianceStatus = getComplianceStatus(d.expirationDate);
+      let complianceDaysLeft: number | null = null;
+      if (d.expirationDate) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const exp = new Date(d.expirationDate);
+        exp.setHours(0, 0, 0, 0);
+        const diffTime = exp.getTime() - today.getTime();
+        complianceDaysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      }
+
       return {
         id: d.id.toString(),
         sourceType: "vehicle",
@@ -1034,7 +1561,9 @@ routeRouter.get("/admin/documents/all", authMiddleware, roleGuard(['admin']), as
         uploadedAt: d.uploadedAt,
         ownerName: ownerName || owner?.email || "Conductor",
         ownerEmail: owner?.email || "",
-        plate: vehicle?.plate || ""
+        plate: vehicle?.plate || "",
+        complianceStatus,
+        complianceDaysLeft
       };
     });
     
@@ -1047,6 +1576,18 @@ routeRouter.get("/admin/documents/all", authMiddleware, roleGuard(['admin']), as
           ownerName = prof.name || "";
         } catch (_) {}
       }
+
+      const complianceStatus = getComplianceStatus(d.expirationDate);
+      let complianceDaysLeft: number | null = null;
+      if (d.expirationDate) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const exp = new Date(d.expirationDate);
+        exp.setHours(0, 0, 0, 0);
+        const diffTime = exp.getTime() - today.getTime();
+        complianceDaysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      }
+
       return {
         id: d.id.toString(),
         sourceType: "user",
@@ -1063,7 +1604,9 @@ routeRouter.get("/admin/documents/all", authMiddleware, roleGuard(['admin']), as
         uploadedAt: d.uploadedAt,
         ownerName: ownerName || owner?.email || "Usuario",
         ownerEmail: owner?.email || "",
-        plate: ""
+        plate: "",
+        complianceStatus,
+        complianceDaysLeft
       };
     });
     
@@ -1293,6 +1836,17 @@ routeRouter.patch("/admin/reports/:id/status", authMiddleware, roleGuard(['admin
     if (!updated) {
       return res.status(404).json({ error: "Reporte no encontrado" });
     }
+
+    // Log admin action
+    const adminId = parseInt((req as any).user!.userId);
+    await db.insert(adminLogs).values({
+      adminId,
+      action: status === "resolved" ? "report_resolved" : "report_updated",
+      targetId: reportId.toString(),
+      details: status === "resolved" 
+        ? `Reporte de incidencia #${reportId} fue resuelto.` 
+        : `Reporte de incidencia #${reportId} fue actualizado a estado: ${status}.`
+    });
     
     res.json({ success: true, report: updated });
   } catch (err: any) {
@@ -1390,30 +1944,123 @@ routeRouter.get("/admin/moderation/stats", authMiddleware, roleGuard(['admin']),
       };
     });
     
-    // 4. Identify Expired Documents
-    const expiredVehicleDocs = allVehicleDocs.filter(d => d.expirationDate && d.expirationDate < today).map(d => {
+    // 4. Identify Expired Documents and Calculate Compliance
+    const expiringSoonLicense: any[] = [];
+    const expiringSoonSoat: any[] = [];
+    const expiringSoonTech: any[] = [];
+    const docMetrics = {
+      alDia: 0,
+      vence_30: 0,
+      vence_15: 0,
+      vencido: 0,
+    };
+
+    // Helper process to calculate and check/trigger notification events
+    const processStatsDoc = async (d: any, type: 'vehicle' | 'user', ownerId: number, ownerEmail: string, ownerName: string, plate?: string) => {
+      const status = getComplianceStatus(d.expirationDate);
+      const name = d.documentName || (d.documentType === 'license' ? 'Licencia de Conducción' : d.documentType === 'soat' ? 'SOAT' : d.documentType === 'tech_preventive' ? 'Revisión Técnica' : d.documentType.toUpperCase());
+
+      // Trigger notification event asynchronously or inline (safely)
+      if (status !== 'AL_DIA' && ownerId) {
+        await checkAndGenerateDocumentNotifications(db, ownerId, d.id, type, d.documentType, status, name);
+      }
+
+      const item = {
+        id: d.id.toString(),
+        sourceType: type,
+        documentType: d.documentType,
+        documentName: name,
+        expirationDate: d.expirationDate,
+        ownerEmail,
+        ownerName,
+        plate: plate || "",
+        complianceStatus: status,
+        status: d.status
+      };
+
+      if (status === 'AL_DIA') {
+        docMetrics.alDia++;
+      } else if (status === 'VENCE_EN_30_DIAS') {
+        docMetrics.vence_30++;
+        if (d.documentType === 'license') expiringSoonLicense.push(item);
+        else if (d.documentType === 'soat') expiringSoonSoat.push(item);
+        else if (d.documentType === 'tech_preventive') expiringSoonTech.push(item);
+      } else if (status === 'VENCE_EN_15_DIAS') {
+        docMetrics.vence_15++;
+        if (d.documentType === 'license') expiringSoonLicense.push(item);
+        else if (d.documentType === 'soat') expiringSoonSoat.push(item);
+        else if (d.documentType === 'tech_preventive') expiringSoonTech.push(item);
+      } else if (status === 'VENCIDO') {
+        docMetrics.vencido++;
+      }
+    };
+
+    // Calculate user documents
+    for (const d of allUserDocs) {
+      const owner = allUsers.find(u => u.id === d.userId);
+      let ownerName = "";
+      if (owner?.profileData) {
+        try {
+          const prof = JSON.parse(owner.profileData);
+          ownerName = prof.name || "";
+        } catch (_) {}
+      }
+      await processStatsDoc(d, 'user', d.userId, owner?.email || "", ownerName || "Conductor");
+    }
+
+    // Calculate vehicle documents
+    for (const d of allVehicleDocs) {
       const vehicle = allVehicles.find(v => v.id === d.vehicleId);
       const owner = vehicle ? allUsers.find(u => u.id === vehicle.userId) : null;
+      let ownerName = "";
+      if (owner?.profileData) {
+        try {
+          const prof = JSON.parse(owner.profileData);
+          ownerName = prof.name || "";
+        } catch (_) {}
+      }
+      await processStatsDoc(d, 'vehicle', vehicle?.userId || 0, owner?.email || "", ownerName || "Conductor", vehicle?.plate);
+    }
+
+    const expiredVehicleDocs = allVehicleDocs.filter(d => getComplianceStatus(d.expirationDate) === 'VENCIDO').map(d => {
+      const vehicle = allVehicles.find(v => v.id === d.vehicleId);
+      const owner = vehicle ? allUsers.find(u => u.id === vehicle.userId) : null;
+      let ownerName = "";
+      if (owner?.profileData) {
+        try {
+          const prof = JSON.parse(owner.profileData);
+          ownerName = prof.name || "";
+        } catch (_) {}
+      }
       return {
         id: d.id.toString(),
         sourceType: "vehicle",
         documentType: d.documentType,
-        documentName: d.documentName || d.documentType.toUpperCase(),
+        documentName: d.documentName || (d.documentType === 'soat' ? 'SOAT' : d.documentType === 'tech_preventive' ? 'Revisión Técnica' : d.documentType.toUpperCase()),
         expirationDate: d.expirationDate,
         ownerEmail: owner?.email || "",
+        ownerName: ownerName || "Conductor",
         plate: vehicle?.plate || ""
       };
     });
     
-    const expiredUserDocs = allUserDocs.filter(d => d.expirationDate && d.expirationDate < today).map(d => {
+    const expiredUserDocs = allUserDocs.filter(d => getComplianceStatus(d.expirationDate) === 'VENCIDO').map(d => {
       const owner = allUsers.find(u => u.id === d.userId);
+      let ownerName = "";
+      if (owner?.profileData) {
+        try {
+          const prof = JSON.parse(owner.profileData);
+          ownerName = prof.name || "";
+        } catch (_) {}
+      }
       return {
         id: d.id.toString(),
         sourceType: "user",
         documentType: d.documentType,
-        documentName: d.documentName || "Licencia",
+        documentName: d.documentName || "Licencia de Conducción",
         expirationDate: d.expirationDate,
         ownerEmail: owner?.email || "",
+        ownerName: ownerName || "Conductor",
         plate: ""
       };
     });
@@ -1507,11 +2154,262 @@ routeRouter.get("/admin/moderation/stats", authMiddleware, roleGuard(['admin']),
         lowRatedDrivers,
         usersWithMultipleReports,
         recurringCancellations
+      },
+      compliance: {
+        alDiaCount: docMetrics.alDia,
+        vence30Count: docMetrics.vence_30,
+        vence15Count: docMetrics.vence_15,
+        vencidoCount: docMetrics.vencido,
+        expiringSoonLicense,
+        expiringSoonSoat,
+        expiringSoonTech
       }
     });
   } catch (err: any) {
     console.error("[RouteRouter] Error returning moderation stats:", err);
     res.status(500).json({ error: "Error al calcular alertas de riesgo" });
+  }
+});
+
+// SPRINT 8.7: GET /admin/reports/executive
+routeRouter.get("/admin/reports/executive", authMiddleware, roleGuard(['admin']), async (req, res) => {
+  try {
+    console.log("[RouteRouter] GET /admin/reports/executive - Fetching real executive report metrics...");
+
+    // 1. Fetch all required tables
+    const allUsers = await db.select().from(users);
+    const allVehicles = await db.select().from(vehicles);
+    const allRoutes = await db.select().from(routes);
+    const allRatings = await db.select().from(ratings);
+    const allUserDocs = await db.select().from(userDocuments);
+    const allVehicleDocs = await db.select().from(vehicleDocuments);
+    const allReports = await db.select().from(reports);
+
+    // --- REPORTE 1: RESUMEN EJECUTIVO DE PLATAFORMA ---
+    const totalUsers = allUsers.length;
+    const drivers = allUsers.filter(u => u.role?.toLowerCase() === 'driver').length;
+    const passengers = allUsers.filter(u => u.role?.toLowerCase() === 'passenger').length;
+    const totalVehicles = allVehicles.length;
+    const approvedVehicles = allVehicles.filter(v => v.verifiedStatus?.toLowerCase() === 'approved').length;
+    const totalRoutes = allRoutes.length;
+    const completedRoutes = allRoutes.filter(r => r.status?.toLowerCase() === 'completed').length;
+    const cancelledRoutes = allRoutes.filter(r => r.status?.toLowerCase() === 'cancelled').length;
+
+    let averageRating = 4.9;
+    if (allRatings.length > 0) {
+      const sum = allRatings.reduce((runningSum, r) => runningSum + (r.score || 0), 0);
+      averageRating = parseFloat((sum / allRatings.length).toFixed(2));
+    }
+
+    const platformSummary = {
+      totalUsers,
+      drivers,
+      passengers,
+      totalVehicles,
+      approvedVehicles,
+      totalRoutes,
+      completedRoutes,
+      cancelledRoutes,
+      averageRating
+    };
+
+    // --- REPORTE 2: CUMPLIMIENTO DOCUMENTAL ---
+    const licenseMetrics = { valid: 0, expiring30: 0, expiring15: 0, expired: 0 };
+    const soatMetrics = { valid: 0, expiring30: 0, expiring15: 0, expired: 0 };
+    const techMetrics = { valid: 0, expiring30: 0, expiring15: 0, expired: 0 };
+
+    allUserDocs.forEach(d => {
+      if (d.documentType === 'license') {
+        const compliance = getComplianceStatus(d.expirationDate);
+        if (compliance === 'AL_DIA') licenseMetrics.valid++;
+        else if (compliance === 'VENCE_EN_30_DIAS') licenseMetrics.expiring30++;
+        else if (compliance === 'VENCE_EN_15_DIAS') licenseMetrics.expiring15++;
+        else if (compliance === 'VENCIDO') licenseMetrics.expired++;
+      }
+    });
+
+    allVehicleDocs.forEach(d => {
+      if (d.documentType === 'soat') {
+        const compliance = getComplianceStatus(d.expirationDate);
+        if (compliance === 'AL_DIA') soatMetrics.valid++;
+        else if (compliance === 'VENCE_EN_30_DIAS') soatMetrics.expiring30++;
+        else if (compliance === 'VENCE_EN_15_DIAS') soatMetrics.expiring15++;
+        else if (compliance === 'VENCIDO') soatMetrics.expired++;
+      } else if (d.documentType === 'tech_preventive') {
+        const compliance = getComplianceStatus(d.expirationDate);
+        if (compliance === 'AL_DIA') techMetrics.valid++;
+        else if (compliance === 'VENCE_EN_30_DIAS') techMetrics.expiring30++;
+        else if (compliance === 'VENCE_EN_15_DIAS') techMetrics.expiring15++;
+        else if (compliance === 'VENCIDO') techMetrics.expired++;
+      }
+    });
+
+    const totalExpired = licenseMetrics.expired + soatMetrics.expired + techMetrics.expired;
+    const totalExpiring = licenseMetrics.expiring15 + soatMetrics.expiring15 + licenseMetrics.expiring30 + soatMetrics.expiring30 + techMetrics.expiring15 + techMetrics.expiring30;
+    
+    let overallRiskIndicator = 'Bajo';
+    if (totalExpired > 5 || (totalExpired > 0 && totalExpired / (allUserDocs.length + allVehicleDocs.length || 1) > 0.15)) {
+      overallRiskIndicator = 'Alto';
+    } else if (totalExpired > 0 || totalExpiring > 2) {
+      overallRiskIndicator = 'Medio';
+    }
+
+    const documentCompliance = {
+      license: licenseMetrics,
+      soat: soatMetrics,
+      tech: techMetrics,
+      overallRiskIndicator
+    };
+
+    // --- REPORTE 3: MODERACIÓN Y SEGURIDAD ---
+    const totalReports = allReports.length;
+    const pendingReports = allReports.filter(r => r.status?.toLowerCase() === 'pending' || r.status?.toLowerCase() === 'reviewing').length;
+    const resolvedReports = allReports.filter(r => r.status?.toLowerCase() === 'resolved').length;
+    const dismissedReports = allReports.filter(r => r.status?.toLowerCase() === 'dismissed').length;
+
+    // Average resolution time in hours
+    let averageResolutionTimeHours = 1.0;
+    const resolvedOrDismissed = allReports.filter(r => (r.status?.toLowerCase() === 'resolved' || r.status?.toLowerCase() === 'dismissed') && r.createdAt && r.updatedAt);
+    if (resolvedOrDismissed.length > 0) {
+      const totalHours = resolvedOrDismissed.reduce((sum, r) => {
+        const created = new Date(r.createdAt!).getTime();
+        const updated = new Date(r.updatedAt!).getTime();
+        return sum + Math.max(0, (updated - created) / (1000 * 60 * 60));
+      }, 0);
+      averageResolutionTimeHours = parseFloat((totalHours / resolvedOrDismissed.length).toFixed(1));
+    }
+
+    // Recursively reported users (>= 2 reports)
+    const reportCounts: Record<number, number> = {};
+    allReports.forEach(r => {
+      reportCounts[r.reportedUserId] = (reportCounts[r.reportedUserId] || 0) + 1;
+    });
+
+    const recurrentlyReportedUsers = Object.entries(reportCounts)
+      .filter(([_, count]) => count >= 2)
+      .map(([userIdStr, count]) => {
+        const uId = parseInt(userIdStr);
+        const u = allUsers.find(user => user.id === uId);
+        let name = "Usuario";
+        if (u?.profileData) {
+          try {
+            const p = JSON.parse(u.profileData);
+            name = p.name || name;
+          } catch (_) {}
+        }
+        return {
+          id: userIdStr,
+          email: u?.email || "N/A",
+          name,
+          role: u?.role || "passenger",
+          count
+        };
+      });
+
+    const moderationSummary = {
+      totalReports,
+      pending: pendingReports,
+      resolved: resolvedReports,
+      dismissed: dismissedReports,
+      averageResolutionTimeHours,
+      recurrentlyReportedUsers
+    };
+
+    // --- REPORTE 4: DESEMPEÑO DE CONDUCTORES ---
+    const driverUsers = allUsers.filter(u => u.role?.toLowerCase() === 'driver');
+    const totalDrivers = driverUsers.length;
+
+    let inactiveDrivers = 0;
+    let activeDrivers = 0;
+    const expiredDriversMap = new Set<number>();
+
+    // expired documents count of driver users
+    allUserDocs.forEach(d => {
+      if (getComplianceStatus(d.expirationDate) === 'VENCIDO') {
+        expiredDriversMap.add(d.userId);
+      }
+    });
+    allVehicleDocs.forEach(d => {
+      if (getComplianceStatus(d.expirationDate) === 'VENCIDO') {
+        const v = allVehicles.find(veh => veh.id === d.vehicleId);
+        if (v) expiredDriversMap.add(v.userId);
+      }
+    });
+
+    // approved vehicle count for each driver
+    const driverApprovedVehicles: Record<number, boolean> = {};
+    allVehicles.forEach(v => {
+      if (v.verifiedStatus === 'approved') {
+        driverApprovedVehicles[v.userId] = true;
+      }
+    });
+
+    const approvedVehicleCount = Object.keys(driverApprovedVehicles).length;
+
+    // Calificación promedio de conductores
+    const driverRatings = driverUsers.filter(u => u.rating).map(u => parseFloat(u.rating!));
+    let averageDriverRating = 4.9;
+    if (driverRatings.length > 0) {
+      averageDriverRating = parseFloat((driverRatings.reduce((a, b) => a + b, 0) / driverRatings.length).toFixed(2));
+    }
+
+    const driversList = driverUsers.map(u => {
+      let name = "Conductor";
+      let isDisabled = false;
+      if (u.profileData) {
+        try {
+          const p = JSON.parse(u.profileData);
+          name = p.name || name;
+          isDisabled = !!p.isDisabled;
+        } catch (_) {}
+      }
+
+      if (isDisabled) inactiveDrivers++;
+      else activeDrivers++;
+
+      // Check verification status
+      const hasApprovedVehicle = !!driverApprovedVehicles[u.id];
+      const hasExpiredDocs = expiredDriversMap.has(u.id);
+
+      let checkStatus = "Pendiente";
+      if (hasApprovedVehicle && !hasExpiredDocs) {
+        checkStatus = "Aprobado";
+      } else if (hasExpiredDocs) {
+        checkStatus = "Documentación Vencida";
+      } else {
+        checkStatus = "Falta Vehículo";
+      }
+
+      return {
+        id: u.id.toString(),
+        email: u.email,
+        name,
+        rating: u.rating || "Nuevo",
+        checkStatus
+      };
+    });
+
+    const driversSummary = {
+      totalDrivers,
+      activeDrivers,
+      inactiveDrivers,
+      approvedVehicleCount,
+      expiredDocumentsCount: expiredDriversMap.size,
+      averageRating: averageDriverRating,
+      driversList
+    };
+
+    // Return combined object
+    res.json({
+      platformSummary,
+      documentCompliance,
+      moderationSummary,
+      driversSummary
+    });
+
+  } catch (err: any) {
+    console.error("[RouteRouter] Error generating executive report metrics:", err);
+    res.status(500).json({ error: "Error interno al compilar reportes ejecutivos" });
   }
 });
 

@@ -36,7 +36,116 @@ import { DashboardTab } from '../components/DashboardTab';
 type TabId = 'dashboard' | 'routes' | 'users' | 'vehicles' | 'documents' | 'moderation';
 
 const AdminView = () => {
-  const { routes } = useAppStore();
+  const { routes, user: currentUser } = useAppStore();
+
+  const isCurrentUserMaster = currentUser?.email?.toLowerCase().trim() === 'admin@syc.com.co' || currentUser?.role?.toLowerCase() === 'admin_master';
+
+  // SPRINT 8.6 - GESTIÓN DE USUARIOS
+  const [showCreateUserModal, setShowCreateUserModal] = useState(false);
+  const [showEditUserModal, setShowEditUserModal] = useState(false);
+  
+  const [selectedUserToEdit, setSelectedUserToEdit] = useState<any | null>(null);
+
+  const [createUserForm, setCreateUserForm] = useState({
+    email: '',
+    password: '',
+    displayName: '',
+    phone: '',
+    role: 'passenger'
+  });
+
+  const [editUserForm, setEditUserForm] = useState({
+    email: '',
+    password: '',
+    displayName: '',
+    phone: '',
+    role: 'passenger'
+  });
+
+  const handleCreateUserSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createUserForm.email.trim() || !createUserForm.password.trim() || !createUserForm.role) {
+      showToast('Por favor completa los campos requeridos (email, password y rol).', 'error');
+      return;
+    }
+
+    if (!createUserForm.email.trim().toLowerCase().endsWith('@syc.com.co')) {
+      showToast('Error: Solo se permiten correos corporativos @syc.com.co', 'error');
+      return;
+    }
+
+    try {
+      const res = await SecureHttpClient.request('/api/routes/admin/users/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(createUserForm)
+      });
+
+      if (res.ok) {
+        showToast('Usuario creado exitosamente.', 'success');
+        setShowCreateUserModal(false);
+        setCreateUserForm({
+          email: '',
+          password: '',
+          displayName: '',
+          phone: '',
+          role: 'passenger'
+        });
+        fetchUsers();
+      } else {
+        const data = await res.json();
+        showToast(data.error || 'Error al crear el usuario.', 'error');
+      }
+    } catch (err) {
+      showToast('Error de comunicación con el servidor.', 'error');
+    }
+  };
+
+  const handleEditUserSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedUserToEdit) return;
+
+    if (!editUserForm.email.trim() || !editUserForm.role) {
+      showToast('Por favor ingresa un correo electrónico y rol válidos.', 'error');
+      return;
+    }
+
+    if (!editUserForm.email.trim().toLowerCase().endsWith('@syc.com.co')) {
+      showToast('Error: Solo se permiten correos corporativos @syc.com.co', 'error');
+      return;
+    }
+
+    try {
+      const body: any = {
+        email: editUserForm.email,
+        displayName: editUserForm.displayName,
+        phone: editUserForm.phone,
+        role: editUserForm.role
+      };
+
+      if (editUserForm.password.trim()) {
+        body.password = editUserForm.password;
+      }
+
+      const res = await SecureHttpClient.request(`/api/routes/admin/users/${selectedUserToEdit.id}/edit`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      if (res.ok) {
+        showToast('Usuario actualizado exitosamente.', 'success');
+        setShowEditUserModal(false);
+        setSelectedUserToEdit(null);
+        fetchUsers();
+      } else {
+        const data = await res.json();
+        showToast(data.error || 'Error al actualizar el usuario.', 'error');
+      }
+    } catch (err) {
+      showToast('Error de comunicación con el servidor.', 'error');
+    }
+  };
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<TabId>('dashboard');
   const [searchQuery, setSearchQuery] = useState('');
@@ -60,6 +169,8 @@ const AdminView = () => {
   const [selectedRoleFilter, setSelectedRoleFilter] = useState<string>('all');
   const [vehicleStatusFilter, setVehicleStatusFilter] = useState<string>('all');
   const [docStatusFilter, setDocStatusFilter] = useState<string>('all');
+  const [docTypeFilter, setDocTypeFilter] = useState<string>('all');
+  const [docComplianceFilter, setDocComplianceFilter] = useState<string>('all');
   
   const [selectedVehicle, setSelectedVehicle] = useState<any | null>(null);
   const [selectedDocument, setSelectedDocument] = useState<any | null>(null);
@@ -363,6 +474,20 @@ const AdminView = () => {
     route.destination?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Contextual Document Filtering (Sprint 8.3)
+  const filteredDocuments = documentsList
+    .filter(d => docStatusFilter === 'all' || d.status?.toLowerCase() === docStatusFilter.toLowerCase())
+    .filter(d => docTypeFilter === 'all' || d.documentType === docTypeFilter)
+    .filter(d => {
+      if (docComplianceFilter === 'all') return true;
+      if (docComplianceFilter === 'AL_DIA') return d.complianceStatus === 'AL_DIA';
+      if (docComplianceFilter === 'EXPIRING_SOON') {
+        return d.complianceStatus === 'VENCE_EN_15_DIAS' || d.complianceStatus === 'VENCE_EN_30_DIAS';
+      }
+      if (docComplianceFilter === 'VENCIDO') return d.complianceStatus === 'VENCIDO';
+      return true;
+    });
+
   const stats = [
     { label: 'Rutas Activas', value: loading ? '...' : String(statsData.activeRoutes), icon: RouteIcon, color: 'text-indigo-600', bg: 'bg-indigo-50' },
     { label: 'Usuarios Totales', value: loading ? '...' : String(statsData.totalUsers), icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
@@ -413,7 +538,7 @@ const AdminView = () => {
       )}
 
       {/* 3. Horizontal Custom Admin Tabs Selector */}
-      <div className="border-b border-slate-100 flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+      <div className="border-b border-slate-100 flex items-center w-full overflow-x-auto pb-0.5 scrollbar-none gap-1.5">
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
           return (
@@ -425,7 +550,7 @@ const AdminView = () => {
                   showToast(`Visualizando adelanto visual de: ${tab.label}`, 'info');
                 }
               }}
-              className={`flex items-center gap-2 py-3 px-4.5 border-b-2 text-sm font-black transition-all whitespace-nowrap justify-center outline-none relative cursor-pointer ${
+              className={`flex-1 flex items-center gap-2 py-3 px-4.5 border-b-2 text-sm font-black transition-all whitespace-nowrap justify-center outline-none relative cursor-pointer ${
                 isActive 
                   ? 'border-violet-600 text-violet-600' 
                   : 'border-transparent text-slate-450 hover:text-slate-700 hover:border-slate-200'
@@ -457,8 +582,25 @@ const AdminView = () => {
             adminLogsList={adminLogsList}
             moderationStats={moderationStats}
             loading={loading}
-            onNavigateTab={(tab) => {
+            onNavigateTab={(tab, filters) => {
               setActiveTab(tab);
+              if (tab === 'documents' && filters) {
+                if (filters.status) {
+                  setDocStatusFilter(filters.status);
+                } else if (filters.type || filters.compliance) {
+                  setDocStatusFilter('all');
+                }
+                if (filters.type) {
+                  setDocTypeFilter(filters.type);
+                } else {
+                  setDocTypeFilter('all');
+                }
+                if (filters.compliance) {
+                  setDocComplianceFilter(filters.compliance);
+                } else {
+                  setDocComplianceFilter('all');
+                }
+              }
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
             onNavigateModerationSubTab={(sub) => {
@@ -547,9 +689,44 @@ const AdminView = () => {
             )}
           </section>
         )}
-               {/* 2. Management of Users - FULLY FUNCTIONAL */}
+
+        {/* 2. Management of Users - FULLY FUNCTIONAL */}
         {activeTab === 'users' && (
           <section className="space-y-5 animate-in fade-in duration-300">
+            {/* Header / Privileges Bar */}
+            <div className="bg-slate-50 border border-slate-150 p-4.5 rounded-[24px] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5">
+              <div className="flex items-center gap-3">
+                <div className={`w-9.5 h-9.5 rounded-xl flex items-center justify-center shrink-0 ${
+                  isCurrentUserMaster ? 'bg-violet-100 text-violet-700' : 'bg-slate-200 text-slate-600'
+                }`}>
+                  {isCurrentUserMaster ? <ShieldIcon size={18} strokeWidth={2.5} /> : <Lock size={18} />}
+                </div>
+                <div className="text-left">
+                  <p className="text-xs font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Nivel de Credenciales</p>
+                  <p className="text-sm font-black text-slate-800 leading-none">
+                    {isCurrentUserMaster ? 'ADMIN_MASTER (Control Absoluto)' : 'ADMIN (Modo Restringido)'}
+                  </p>
+                </div>
+              </div>
+              
+              <button
+                onClick={() => {
+                  setCreateUserForm({
+                    email: '',
+                    password: '',
+                    displayName: '',
+                    phone: '',
+                    role: 'passenger'
+                  });
+                  setShowCreateUserModal(true);
+                }}
+                className="w-full sm:w-auto px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black tracking-wide hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+              >
+                <UserCheck size={14} strokeWidth={2.5} />
+                <span>Crear Nuevo Usuario</span>
+              </button>
+            </div>
+
             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
               <div>
                 <h3 className="text-lg font-black text-slate-800 tracking-tight">Gestión de Usuarios</h3>
@@ -568,6 +745,7 @@ const AdminView = () => {
                   <option value="passenger">Pasajeros</option>
                   <option value="driver">Conductores</option>
                   <option value="admin">Administradores</option>
+                  <option value="admin_master">Master Admins</option>
                 </select>
                 <button
                   onClick={fetchUsers}
@@ -610,58 +788,106 @@ const AdminView = () => {
                       <tbody className="divide-y divide-slate-100/70">
                         {usersList
                           .filter(user => selectedRoleFilter === 'all' || user.role?.toLowerCase() === selectedRoleFilter.toLowerCase())
-                          .map((user) => (
-                            <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
-                              <td className="px-6 py-4">
-                                <div className="flex items-center gap-2.5">
-                                  <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 text-xs font-black flex items-center justify-center shrink-0">
-                                    {user.displayName?.slice(0, 2).toUpperCase() || user.email?.slice(0, 2).toUpperCase() || 'US'}
+                          .map((user) => {
+                            const isUserAdmin = user.role?.toLowerCase() === 'admin' || user.role?.toLowerCase() === 'admin_master';
+                            const isUserAdminMaster = user.role?.toLowerCase() === 'admin_master' || user.email?.toLowerCase().trim() === 'admin@syc.com.co';
+                            
+                            // Standard admin cannot edit/toggle any administrator or modifying master
+                            const canModifyUser = isCurrentUserMaster || (!isUserAdmin && !isUserAdminMaster);
+
+                            return (
+                              <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
+                                <td className="px-6 py-4">
+                                  <div className="flex items-center gap-2.5">
+                                    <div className={`w-8 h-8 rounded-full text-xs font-black flex items-center justify-center shrink-0 ${
+                                      isUserAdminMaster ? 'bg-violet-100 text-violet-700' : isUserAdmin ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
+                                    }`}>
+                                      {user.displayName?.slice(0, 2).toUpperCase() || user.email?.slice(0, 2).toUpperCase() || 'US'}
+                                    </div>
+                                    <div className="text-left min-w-0">
+                                      <p className="font-extrabold text-slate-800 text-sm leading-snug flex items-center gap-1.5">
+                                        <span className="truncate max-w-[150px] sm:max-w-none">{user.displayName || 'Usuario'}</span>
+                                        {!canModifyUser && (
+                                          <span className="px-1.5 py-0.5 rounded-md bg-slate-100 border border-slate-205 text-[9px] text-slate-450 font-semibold flex items-center gap-0.5">
+                                            <Lock size={8} /> Protegido
+                                          </span>
+                                        )}
+                                      </p>
+                                      <p className="text-[10px] text-slate-400 font-bold leading-none mt-0.5">ID: #{user.id}</p>
+                                    </div>
                                   </div>
-                                  <div className="text-left min-w-0">
-                                    <p className="font-extrabold text-slate-800 text-sm leading-snug truncate max-w-[150px] sm:max-w-none">{user.displayName || 'Usuario de Rivo'}</p>
-                                    <p className="text-[10px] text-slate-400 font-bold leading-none mt-0.5">ID: #{user.id}</p>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <span className="text-slate-600 font-semibold text-xs shrink-0 block truncate max-w-[180px] sm:max-w-none">{user.email}</span>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <span className={`inline-block text-[10px] font-black px-2.5 py-0.5 rounded leading-none uppercase tracking-wider ${
+                                    isUserAdminMaster
+                                      ? 'bg-purple-100 text-purple-755 border border-purple-200' 
+                                      : isUserAdmin
+                                      ? 'bg-violet-50 text-violet-755 border border-violet-100' 
+                                      : user.role?.toLowerCase() === 'driver'
+                                      ? 'bg-indigo-50 text-indigo-700 border border-indigo-100'
+                                      : 'bg-slate-50 text-slate-500 border border-slate-100'
+                                  }`}>
+                                    {isUserAdminMaster ? 'ADMIN MASTER 👑' : user.role === 'driver' ? 'CONDUCTOR' : user.role === 'passenger' ? 'PASAJERO' : user.role}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4">
+                                  {user.isDisabled ? (
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-650 text-[10.5px] font-black uppercase tracking-wider border border-rose-100">
+                                      <Ban size={11} /> SUSPENDIDO
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-650 text-[10.5px] font-black uppercase tracking-wider border border-emerald-100">
+                                      <CheckCircle size={11} className="text-emerald-500" /> ACTIVO
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      disabled={!canModifyUser}
+                                      onClick={() => {
+                                        setSelectedUserToEdit(user);
+                                        setEditUserForm({
+                                          email: user.email,
+                                          password: '',
+                                          displayName: user.displayName || '',
+                                          phone: user.phone || '',
+                                          role: user.role
+                                        });
+                                        setShowEditUserModal(true);
+                                      }}
+                                      className={`px-2.5 py-1 text-xs font-black rounded-lg transition-colors border select-none ${
+                                        canModifyUser
+                                          ? 'bg-white text-slate-700 hover:bg-slate-50 border-slate-200 cursor-pointer'
+                                          : 'bg-slate-50 text-slate-350 border-slate-150 cursor-not-allowed'
+                                      }`}
+                                      title={canModifyUser ? "Editar usuario" : "No tienes permisos para editar este usuario"}
+                                    >
+                                      {canModifyUser ? 'Editar' : '🔒 Editar'}
+                                    </button>
+
+                                    <button
+                                      disabled={!canModifyUser}
+                                      onClick={() => handleToggleUserStatus(user.id)}
+                                      className={`px-2.5 py-1 text-xs font-black rounded-lg transition-colors border select-none ${
+                                        !canModifyUser
+                                          ? 'bg-slate-50 text-slate-350 border-slate-150 cursor-not-allowed'
+                                          : user.isDisabled 
+                                          ? 'bg-emerald-500 text-white hover:bg-emerald-600 border-transparent shadow-xs cursor-pointer' 
+                                          : 'bg-rose-55 bg-rose-50 text-rose-650 hover:bg-rose-100 border-rose-100 cursor-pointer'
+                                      }`}
+                                      title={canModifyUser ? "Bloquear o reactivar" : "No tienes permisos para suspender este usuario"}
+                                    >
+                                      {!canModifyUser ? '🔒 Estado' : user.isDisabled ? 'Reactivar' : 'Suspender'}
+                                    </button>
                                   </div>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4">
-                                <span className="text-slate-600 font-semibold text-xs shrink-0 block truncate max-w-[180px] sm:max-w-none">{user.email}</span>
-                              </td>
-                              <td className="px-6 py-4">
-                                <span className={`inline-block text-[10px] font-black px-2.5 py-0.5 rounded leading-none uppercase tracking-wider ${
-                                  user.role?.toLowerCase() === 'admin' 
-                                    ? 'bg-violet-50 text-violet-755 border border-violet-100' 
-                                    : user.role?.toLowerCase() === 'driver'
-                                    ? 'bg-indigo-50 text-indigo-700 border border-indigo-100'
-                                    : 'bg-slate-50 text-slate-500 border border-slate-100'
-                                }`}>
-                                  {user.role}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4">
-                                {user.isDisabled ? (
-                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-650 text-[10.5px] font-black uppercase tracking-wider border border-rose-100">
-                                    <Ban size={11} /> SUSPENDIDO
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-650 text-[10.5px] font-black uppercase tracking-wider border border-emerald-100">
-                                    <CheckCircle size={11} className="text-emerald-500" /> ACTIVO
-                                  </span>
-                                )}
-                              </td>
-                              <td className="px-6 py-4">
-                                <button
-                                  onClick={() => handleToggleUserStatus(user.id)}
-                                  className={`px-3 py-1 text-xs font-black rounded-lg transition-colors cursor-pointer outline-none ${
-                                    user.isDisabled 
-                                      ? 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-xs' 
-                                      : 'bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-100'
-                                  }`}
-                                >
-                                  {user.isDisabled ? 'Habilitar' : 'Deactivar'}
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
+                                </td>
+                              </tr>
+                            );
+                          })}
                       </tbody>
                     </table>
                   </div>
@@ -671,64 +897,331 @@ const AdminView = () => {
                 <div className="grid grid-cols-1 gap-4 md:hidden">
                   {usersList
                     .filter(user => selectedRoleFilter === 'all' || user.role?.toLowerCase() === selectedRoleFilter.toLowerCase())
-                    .map((user) => (
-                      <div key={user.id} className="bg-white border border-slate-100 rounded-3xl p-5 shadow-xs flex flex-col justify-between gap-4">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 text-xs font-black flex items-center justify-center shrink-0">
-                              {user.displayName?.slice(0, 2).toUpperCase() || user.email?.slice(0, 2).toUpperCase() || 'US'}
-                            </div>
-                            <div className="min-w-0">
-                              <h4 className="font-extrabold text-slate-800 text-sm leading-snug truncate">{user.displayName || 'Usuario de Rivo'}</h4>
-                              <p className="text-[10px] text-slate-400 font-bold mt-0.5">ID: #{user.id}</p>
-                            </div>
-                          </div>
-                          <span className={`inline-block text-[9px] font-black px-2.5 py-1 rounded leading-none uppercase tracking-wider shrink-0 ${
-                            user.role?.toLowerCase() === 'admin' 
-                              ? 'bg-violet-50 text-violet-755 border border-violet-100' 
-                              : user.role?.toLowerCase() === 'driver'
-                              ? 'bg-indigo-50 text-indigo-700 border border-indigo-100'
-                              : 'bg-slate-50 text-slate-500 border border-slate-100'
-                          }`}>
-                            {user.role}
-                          </span>
-                        </div>
+                    .map((user) => {
+                      const isUserAdmin = user.role?.toLowerCase() === 'admin' || user.role?.toLowerCase() === 'admin_master';
+                      const isUserAdminMaster = user.role?.toLowerCase() === 'admin_master' || user.email?.toLowerCase().trim() === 'admin@syc.com.co';
+                      const canModifyUser = isCurrentUserMaster || (!isUserAdmin && !isUserAdminMaster);
 
-                        <div className="border-t border-slate-50 pt-3.5 space-y-3">
-                          <div>
-                            <span className="text-slate-400 block text-[9px] font-black uppercase tracking-wider mb-0.5">Email</span>
-                            <span className="text-slate-600 font-semibold text-xs break-all">{user.email}</span>
+                      return (
+                        <div key={user.id} className="bg-white border border-slate-100 rounded-3xl p-5 shadow-xs flex flex-col justify-between gap-4">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className={`w-10 h-10 rounded-full text-xs font-black flex items-center justify-center shrink-0 ${
+                                isUserAdminMaster ? 'bg-violet-100 text-violet-700' : isUserAdmin ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
+                              }`}>
+                                {user.displayName?.slice(0, 2).toUpperCase() || user.email?.slice(0, 2).toUpperCase() || 'US'}
+                              </div>
+                              <div className="min-w-0">
+                                <h4 className="font-extrabold text-slate-800 text-sm leading-snug truncate flex items-center gap-1">
+                                  <span>{user.displayName || 'Usuario'}</span>
+                                  {!canModifyUser && <Lock size={10} className="text-slate-400" />}
+                                </h4>
+                                <p className="text-[10px] text-slate-400 font-bold mt-0.5">ID: #{user.id}</p>
+                              </div>
+                            </div>
+                            <span className={`inline-block text-[9px] font-black px-2.5 py-1 rounded leading-none uppercase tracking-wider shrink-0 ${
+                              isUserAdminMaster
+                                ? 'bg-purple-100 text-purple-755 border border-purple-200' 
+                                : isUserAdmin
+                                ? 'bg-violet-50 text-violet-755 border border-violet-100' 
+                                : user.role?.toLowerCase() === 'driver'
+                                ? 'bg-indigo-50 text-indigo-700 border border-indigo-100'
+                                : 'bg-slate-50 text-slate-500 border border-slate-100'
+                            }`}>
+                              {isUserAdminMaster ? 'ADMIN MASTER 👑' : user.role === 'driver' ? 'CONDUCTOR' : user.role === 'passenger' ? 'PASAJERO' : user.role}
+                            </span>
                           </div>
 
-                          <div className="flex items-center justify-between pt-1 border-t border-slate-50/70">
+                          <div className="border-t border-slate-50 pt-3.5 space-y-3">
                             <div>
-                              <span className="text-slate-400 block text-[9px] font-black uppercase tracking-wider mb-1">Estado</span>
-                              {user.isDisabled ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-650 text-[10px] font-black uppercase tracking-wider border border-rose-100">
-                                  <Ban size={10} /> SUSPENDIDO
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-650 text-[10px] font-black uppercase tracking-wider border border-emerald-100">
-                                  <CheckCircle size={10} className="text-emerald-500" /> ACTIVO
-                                </span>
-                              )}
+                              <span className="text-slate-400 block text-[9px] font-black uppercase tracking-wider mb-0.5">Email</span>
+                              <span className="text-slate-600 font-semibold text-xs break-all">{user.email}</span>
                             </div>
 
-                            <button
-                              onClick={() => handleToggleUserStatus(user.id)}
-                              className={`px-4 py-2 text-xs font-black rounded-xl transition-all cursor-pointer min-h-[40px] flex items-center justify-center ${
-                                user.isDisabled 
-                                  ? 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-xs' 
-                                  : 'bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-100'
-                              }`}
-                            >
-                              {user.isDisabled ? 'Habilitar' : 'Deactivar'}
-                            </button>
+                            <div className="flex items-end justify-between pt-2 border-t border-slate-50/70">
+                              <div>
+                                <span className="text-slate-400 block text-[9px] font-black uppercase tracking-wider mb-1">Estado</span>
+                                {user.isDisabled ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-650 text-[10px] font-black uppercase tracking-wider border border-rose-100">
+                                    <Ban size={10} /> SUSPENDIDO
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-650 text-[10px] font-black uppercase tracking-wider border border-emerald-100">
+                                    <CheckCircle size={10} className="text-emerald-500" /> ACTIVO
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  disabled={!canModifyUser}
+                                  onClick={() => {
+                                    setSelectedUserToEdit(user);
+                                    setEditUserForm({
+                                      email: user.email,
+                                      password: '',
+                                      displayName: user.displayName || '',
+                                      phone: user.phone || '',
+                                      role: user.role
+                                    });
+                                    setShowEditUserModal(true);
+                                  }}
+                                  className={`px-3 py-1.5 text-xs font-black rounded-lg transition-all ${
+                                    canModifyUser
+                                      ? 'bg-white text-slate-700 border border-slate-200'
+                                      : 'bg-slate-50 text-slate-300 border border-slate-150 cursor-not-allowed'
+                                  }`}
+                                >
+                                  {canModifyUser ? 'Editar' : '🔒'}
+                                </button>
+                                
+                                <button
+                                  disabled={!canModifyUser}
+                                  onClick={() => handleToggleUserStatus(user.id)}
+                                  className={`px-3 py-1.5 text-xs font-black rounded-lg transition-all ${
+                                    !canModifyUser
+                                      ? 'bg-slate-50 text-slate-300 border border-slate-150 cursor-not-allowed'
+                                      : user.isDisabled 
+                                      ? 'bg-emerald-500 text-white shadow-xs' 
+                                      : 'bg-rose-50 text-rose-600 border border-rose-100'
+                                  }`}
+                                >
+                                  {!canModifyUser ? '🔒 Estado' : user.isDisabled ? 'Habilitar' : 'Inactivar'}
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                 </div>
+              </div>
+            )}
+
+            {/* CREAR USUARIO MODAL */}
+            {showCreateUserModal && (
+              <div id="modal-create-user" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+                <motion.div 
+                  initial={{ scale: 0.95, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  className="bg-white rounded-[28px] max-w-md w-full border border-slate-100 p-6 shadow-2xl text-left space-y-4"
+                >
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
+                      <UserCheck size={20} className="text-indigo-600" />
+                      Crear Nuevo Usuario
+                    </h3>
+                    <button 
+                      onClick={() => setShowCreateUserModal(false)}
+                      className="text-slate-400 hover:text-slate-600 font-bold p-1 rounded-lg hover:bg-slate-50 cursor-pointer text-xs"
+                    >
+                      ✕ Cerrar
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleCreateUserSubmit} className="space-y-4">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-slate-450 tracking-wider">Correo Electrónico *</label>
+                      <input 
+                        type="email" 
+                        required
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-slate-800"
+                        placeholder="ejemplo@rivo.com"
+                        value={createUserForm.email}
+                        onChange={(e) => setCreateUserForm(prev => ({ ...prev, email: e.target.value }))}
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-slate-450 tracking-wider">Contraseña de Acceso *</label>
+                      <input 
+                        type="password" 
+                        required
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-slate-800"
+                        placeholder="••••••••••••"
+                        value={createUserForm.password}
+                        onChange={(e) => setCreateUserForm(prev => ({ ...prev, password: e.target.value }))}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black uppercase text-slate-450 tracking-wider">Nombre Completo</label>
+                        <input 
+                          type="text"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-slate-800"
+                          placeholder="Juan Pérez"
+                          value={createUserForm.displayName}
+                          onChange={(e) => setCreateUserForm(prev => ({ ...prev, displayName: e.target.value }))}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black uppercase text-slate-450 tracking-wider">Teléfono de Enlace</label>
+                        <input 
+                          type="text"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-slate-800"
+                          placeholder="+57 300 000 0000"
+                          value={createUserForm.phone}
+                          onChange={(e) => setCreateUserForm(prev => ({ ...prev, phone: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-slate-450 tracking-wider flex items-center gap-1">
+                        <span>Rol Asignado *</span>
+                      </label>
+                      <select
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                        value={createUserForm.role}
+                        onChange={(e) => setCreateUserForm(prev => ({ ...prev, role: e.target.value }))}
+                      >
+                        <option value="passenger">PASAJERO (Pasajero corporativo estándar)</option>
+                        <option value="driver">CONDUCTOR (Conductor de recorridos)</option>
+                        
+                        {/* standard ADMIN can NOT create admin roles */}
+                        <option value="admin" disabled={!isCurrentUserMaster}>
+                          ADMINISTRADOR {!isCurrentUserMaster ? '🔒 (Requiere ADMIN_MASTER)' : ''}
+                        </option>
+                        <option value="admin_master" disabled={!isCurrentUserMaster}>
+                          ADMINISTRADOR MASTER {!isCurrentUserMaster ? '🔒 (Requiere ADMIN_MASTER)' : ''}
+                        </option>
+                      </select>
+                    </div>
+
+                    <div className="flex items-center gap-3.5 pt-2">
+                      <button 
+                        type="button"
+                        onClick={() => setShowCreateUserModal(false)}
+                        className="w-1/2 px-4 py-2.5 border border-slate-200 rounded-xl text-xs font-black text-slate-700 hover:bg-slate-50 cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                      <button 
+                        type="submit"
+                        className="w-1/2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-black hover:bg-indigo-700 cursor-pointer shadow-xs"
+                      >
+                        Crear Afiliado
+                      </button>
+                    </div>
+                  </form>
+                </motion.div>
+              </div>
+            )}
+
+            {/* EDITAR USUARIO MODAL */}
+            {showEditUserModal && selectedUserToEdit && (
+              <div id="modal-edit-user" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+                <motion.div 
+                  initial={{ scale: 0.95, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  className="bg-white rounded-[28px] max-w-md w-full border border-slate-100 p-6 shadow-2xl text-left space-y-4"
+                >
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
+                      <Activity size={20} className="text-indigo-600" />
+                      Editar Usuario #{selectedUserToEdit.id}
+                    </h3>
+                    <button 
+                      onClick={() => {
+                        setShowEditUserModal(false);
+                        setSelectedUserToEdit(null);
+                      }}
+                      className="text-slate-400 hover:text-slate-600 font-bold p-1 rounded-lg hover:bg-slate-50 cursor-pointer text-xs"
+                    >
+                      ✕ Cerrar
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleEditUserSubmit} className="space-y-4">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-slate-450 tracking-wider">Correo Electrónico *</label>
+                      <input 
+                        type="email" 
+                        required
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-slate-800"
+                        value={editUserForm.email}
+                        onChange={(e) => setEditUserForm(prev => ({ ...prev, email: e.target.value }))}
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-slate-450 tracking-wider">
+                        Contraseña (Opcional - Dejar vacío para no cambiar)
+                      </label>
+                      <input 
+                        type="password" 
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-slate-800"
+                        placeholder="Escribe para modificar..."
+                        value={editUserForm.password}
+                        onChange={(e) => setEditUserForm(prev => ({ ...prev, password: e.target.value }))}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black uppercase text-slate-450 tracking-wider">Nombre Completo</label>
+                        <input 
+                          type="text"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-slate-800"
+                          value={editUserForm.displayName}
+                          onChange={(e) => setEditUserForm(prev => ({ ...prev, displayName: e.target.value }))}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black uppercase text-slate-450 tracking-wider">Teléfono de Enlace</label>
+                        <input 
+                          type="text"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-slate-800"
+                          value={editUserForm.phone}
+                          onChange={(e) => setEditUserForm(prev => ({ ...prev, phone: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-slate-450 tracking-wider">Rol Asignado *</label>
+                      
+                      {/* Enforce role assignment rules */}
+                      <select
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                        value={editUserForm.role}
+                        onChange={(e) => setEditUserForm(prev => ({ ...prev, role: e.target.value }))}
+                      >
+                        <option value="passenger">PASAJERO</option>
+                        <option value="driver">CONDUCTOR</option>
+                        
+                        <option value="admin" disabled={!isCurrentUserMaster}>
+                          ADMINISTRADOR {!isCurrentUserMaster ? '🔒 (Requiere ADMIN_MASTER)' : ''}
+                        </option>
+                        <option value="admin_master" disabled={!isCurrentUserMaster}>
+                          ADMINISTRADOR MASTER {!isCurrentUserMaster ? '🔒 (Requiere ADMIN_MASTER)' : ''}
+                        </option>
+                      </select>
+                    </div>
+
+                    <div className="flex items-center gap-3.5 pt-2">
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          setShowEditUserModal(false);
+                          setSelectedUserToEdit(null);
+                        }}
+                        className="w-1/2 px-4 py-2.5 border border-slate-200 rounded-xl text-xs font-black text-slate-700 hover:bg-slate-50 cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                      <button 
+                        type="submit"
+                        className="w-1/2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-black hover:bg-indigo-700 cursor-pointer shadow-xs"
+                      >
+                        Guardar Cambios
+                      </button>
+                    </div>
+                  </form>
+                </motion.div>
               </div>
             )}
           </section>
@@ -926,23 +1419,65 @@ const AdminView = () => {
                 <h3 className="text-lg font-black text-slate-800 tracking-tight">Gestión e Historial Documental</h3>
                 <p className="text-xs text-slate-400 font-semibold">Validación del SOAT, licencia de conducción e inspecciones mecánicas preventivas</p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2.5">
+                {/* Filter 1: Audit Status */}
                 <span className="text-xs text-slate-400 font-bold flex items-center gap-1">
-                  <Filter size={12} /> Estado:
+                  <Filter size={12} /> Auditoría:
                 </span>
                 <select
                   value={docStatusFilter}
                   onChange={(e) => setDocStatusFilter(e.target.value)}
                   className="bg-white border border-slate-200 text-xs text-slate-700 rounded-lg px-2.5 py-1.5 font-bold focus:outline-hidden"
                 >
-                  <option value="all">Todos los Estados</option>
-                  <option value="pending">Pendientes de Auditoría</option>
+                  <option value="all">Todos (Estatus)</option>
+                  <option value="pending">Pendientes</option>
                   <option value="approved">Aprobados</option>
                   <option value="rejected">Rechazados</option>
                 </select>
+
+                {/* Filter 2: Document Type */}
+                <span className="text-xs text-slate-400 font-bold ml-1">Tipo:</span>
+                <select
+                  value={docTypeFilter}
+                  onChange={(e) => setDocTypeFilter(e.target.value)}
+                  className="bg-white border border-slate-200 text-xs text-slate-700 rounded-lg px-2.5 py-1.5 font-bold focus:outline-hidden"
+                >
+                  <option value="all">Todos los tipos</option>
+                  <option value="license">Licencia de Conducción</option>
+                  <option value="soat">SOAT</option>
+                  <option value="tech_preventive">Tecnomecánica</option>
+                </select>
+
+                {/* Filter 3: Compliance/Expiration */}
+                <span className="text-xs text-slate-400 font-bold ml-1">Vigencia:</span>
+                <select
+                  value={docComplianceFilter}
+                  onChange={(e) => setDocComplianceFilter(e.target.value)}
+                  className="bg-white border border-slate-200 text-xs text-slate-700 rounded-lg px-2.5 py-1.5 font-bold focus:outline-hidden"
+                >
+                  <option value="all">Cualquier vigencia</option>
+                  <option value="AL_DIA">Al Día (Vigentes)</option>
+                  <option value="EXPIRING_SOON">Próximos a Vencer (15-30 d)</option>
+                  <option value="VENCIDO">Vencidos (Acción Crítica)</option>
+                </select>
+
+                {/* Clear Filters Button (If any active) */}
+                {(docStatusFilter !== 'all' || docTypeFilter !== 'all' || docComplianceFilter !== 'all') && (
+                  <button
+                    onClick={() => {
+                      setDocStatusFilter('all');
+                      setDocTypeFilter('all');
+                      setDocComplianceFilter('all');
+                    }}
+                    className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-xs font-black text-slate-600 rounded-lg transition-colors cursor-pointer"
+                  >
+                    Limpiar Filtros
+                  </button>
+                )}
+
                 <button
                   onClick={fetchDocuments}
-                  className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-400 shrink-0 cursor-pointer"
+                  className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-400 shrink-0 cursor-pointer ml-1"
                   title="Recargar"
                 >
                   <RefreshCw size={14} className={dataLoading.documents ? "animate-spin text-indigo-500" : ""} />
@@ -963,6 +1498,24 @@ const AdminView = () => {
                 <h4 className="font-bold text-slate-700">No hay documentos registrados</h4>
                 <p className="text-xs text-slate-400 max-w-xs mx-auto">No se encontraron documentos en la base de datos para auditar.</p>
               </div>
+            ) : filteredDocuments.length === 0 ? (
+              <div className="bg-white border border-slate-100 rounded-[28px] p-12 text-center space-y-3 shadow-xs">
+                <div className="w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center text-slate-350 mx-auto">
+                  <Filter size={20} className="text-slate-400" />
+                </div>
+                <h4 className="font-bold text-slate-750">Ningún documento coincide con los filtros</h4>
+                <p className="text-xs text-slate-400 max-w-sm mx-auto">No se encontraron documentos que coincidan con los criterios de Auditoría, Tipo y Vigencia seleccionados.</p>
+                <button
+                  onClick={() => {
+                    setDocStatusFilter('all');
+                    setDocTypeFilter('all');
+                    setDocComplianceFilter('all');
+                  }}
+                  className="mt-2 inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-black rounded-xl transition-colors cursor-pointer border border-indigo-100"
+                >
+                  Restablecer Todos los Filtros
+                </button>
+              </div>
             ) : (
               <div className="space-y-4">
                 {/* Desktop View Table */}
@@ -979,8 +1532,7 @@ const AdminView = () => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100/70">
-                        {documentsList
-                          .filter(d => docStatusFilter === 'all' || d.status?.toLowerCase() === docStatusFilter.toLowerCase())
+                        {filteredDocuments
                           .map((doc) => {
                             const isDocSelected = selectedDocument?.id === doc.id && selectedDocument?.sourceType === doc.sourceType;
                             const isExpired = doc.expirationDate ? new Date(doc.expirationDate) < new Date() : false;
@@ -1110,8 +1662,7 @@ const AdminView = () => {
 
                 {/* Mobile View Card Grid */}
                 <div className="grid grid-cols-1 gap-4 md:hidden">
-                  {documentsList
-                    .filter(d => docStatusFilter === 'all' || d.status?.toLowerCase() === docStatusFilter.toLowerCase())
+                  {filteredDocuments
                     .map((doc) => {
                       const isDocSelected = selectedDocument?.id === doc.id && selectedDocument?.sourceType === doc.sourceType;
                       const isExpired = doc.expirationDate ? new Date(doc.expirationDate) < new Date() : false;

@@ -19,7 +19,7 @@ import {
   Shield
 } from 'lucide-react';
 import { useAppStore } from '../hooks/useAppStore';
-import { UserRole } from '../shared/enums';
+import { UserRole, isAdminUser } from '../shared/enums';
 import { cn } from '../lib/utils';
 
 export default function PrivacyView() {
@@ -31,6 +31,7 @@ export default function PrivacyView() {
     switch (role) {
       case UserRole.DRIVER:
         return { label: 'Conductor', bg: 'bg-violet-50 border-violet-100 text-violet-700' };
+      case 'admin_master':
       case UserRole.ADMIN:
         return { label: 'Administrador', bg: 'bg-rose-50 border-rose-100 text-rose-700' };
       default:
@@ -236,7 +237,7 @@ export default function PrivacyView() {
             )}
 
             {/* Dinámico para ADMINISTRADOR */}
-            {user?.role === UserRole.ADMIN && (
+            {user && isAdminUser(user.role) && (
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-xs font-bold text-slate-450 uppercase tracking-widest">
                   <Server size={14} /> Gestión Administrativa

@@ -41,7 +41,7 @@ interface DashboardTabProps {
   adminLogsList: any[];
   moderationStats: any;
   loading: boolean;
-  onNavigateTab: (tab: 'dashboard' | 'routes' | 'users' | 'vehicles' | 'documents' | 'moderation') => void;
+  onNavigateTab: (tab: 'dashboard' | 'routes' | 'users' | 'vehicles' | 'documents' | 'moderation', filters?: { status?: string; type?: string; compliance?: string }) => void;
   onNavigateModerationSubTab?: (subtab: 'reports' | 'logs' | 'risks' | 'incidents') => void;
 }
 
@@ -104,8 +104,21 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   // 3. Finding TOP 3 oldest pending tasks (Priority Operations)
   const allPendingItems: any[] = [];
   
+  // Add expired documents (High priority)
+  documentsList.filter(d => d.complianceStatus === 'VENCIDO' && d.status !== 'rejected').forEach(d => {
+    allPendingItems.push({
+      id: `expired-doc-${d.id}`,
+      type: 'expired_document',
+      docType: d.documentType,
+      title: `🚨 DOCUMENTO VENCIDO: ${d.documentName}`,
+      subtitle: `Conductor: ${d.ownerName || 'Desconocido'} (${d.ownerEmail || ''}) • Requiere decisión de suspensión manual`,
+      date: new Date('1970-01-01'), // Oldest date to prioritize first
+      tabTarget: 'documents'
+    });
+  });
+
   // Add pending docs
-  documentsList.filter(d => d.status !== 'approved' && d.status !== 'rejected').forEach(d => {
+  documentsList.filter(d => d.status !== 'approved' && d.status !== 'rejected' && d.complianceStatus !== 'VENCIDO').forEach(d => {
     allPendingItems.push({
       id: `doc-${d.id}`,
       type: 'document',
@@ -148,12 +161,28 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     });
   });
 
-  // Sort by date ascending (oldest first)
+  // Sort by date ascending (oldest first - expired items will bubbled up due to 1970 date)
   const sortedPendingItems = [...allPendingItems].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   const top3PendingItems = sortedPendingItems.slice(0, 3);
 
   // 4. Slice of the last 3 relevant logs
   const top3Logs = adminLogsList.slice(0, 3);
+
+  // Safe compliance variables extraction
+  const compStats = moderationStats?.compliance || {
+    alDiaCount: 0,
+    vence30Count: 0,
+    vence15Count: 0,
+    vencidoCount: 0,
+    expiringSoonLicense: [],
+    expiringSoonSoat: [],
+    expiringSoonTech: []
+  };
+
+  const expiredDocsCount = compStats.vencidoCount || 0;
+  const licensesExpiringCount = compStats.expiringSoonLicense?.length || 0;
+  const soatExpiringCount = compStats.expiringSoonSoat?.length || 0;
+  const techExpiringCount = compStats.expiringSoonTech?.length || 0;
 
   if (loading) {
     return (
@@ -166,6 +195,120 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300" id="centro-mando-operativo">
+
+      {/* SECTION: PREVENTIVE DOCUMENT CONTROL BAR */}
+      <section className="bg-white border border-slate-100 p-5 rounded-[28px] shadow-xs space-y-4" id="compliance-prevention-panel">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="text-left">
+            <h4 className="text-sm font-black text-slate-800 tracking-tight flex items-center gap-2 uppercase">
+              🛡️ Control Preventivo y Cumplimiento Documental
+            </h4>
+            <p className="text-[11px] text-slate-400 font-bold mt-0.5">
+              Monitoreo activo para evitar multas de tránsito y asegurar la circulación reglamentaria de la flota Rivo.
+            </p>
+          </div>
+          <span className="shrink-0 self-start sm:self-center px-2.5 py-1 bg-indigo-50 text-indigo-700 border border-indigo-150 rounded-full text-[9px] font-black uppercase tracking-wider">
+            Fase 1: Alertas en Vivo
+          </span>
+        </div>
+
+        {/* 4 Counter Indicators Grid */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {/* Indicator 1: Licencias */}
+          <div 
+            onClick={() => onNavigateTab('documents', { type: 'license', compliance: 'EXPIRING_SOON' })}
+            className={`p-3.5 rounded-2xl border text-left cursor-pointer transition-all ${
+              licensesExpiringCount > 0 
+                ? 'bg-amber-50/40 border-amber-200/50 hover:bg-amber-50/70' 
+                : 'bg-slate-50/20 border-slate-100/80 hover:bg-slate-50/60'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Licencias</span>
+              {licensesExpiringCount > 0 && <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />}
+            </div>
+            <div className="flex items-end justify-between mt-2">
+              <span className={`text-xl font-black ${licensesExpiringCount > 0 ? 'text-amber-600' : 'text-slate-700'}`}>
+                {licensesExpiringCount}
+              </span>
+              <span className="text-[9px] text-slate-400 font-bold block">Por vencer</span>
+            </div>
+          </div>
+
+          {/* Indicator 2: SOAT */}
+          <div 
+            onClick={() => onNavigateTab('documents', { type: 'soat', compliance: 'EXPIRING_SOON' })}
+            className={`p-3.5 rounded-2xl border text-left cursor-pointer transition-all ${
+              soatExpiringCount > 0 
+                ? 'bg-amber-50/40 border-amber-200/50 hover:bg-amber-50/70' 
+                : 'bg-slate-50/20 border-slate-100/80 hover:bg-slate-50/60'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">SOAT</span>
+              {soatExpiringCount > 0 && <span className="w-1.5 h-1.5 rounded-full bg-amber-550 animate-pulse" />}
+            </div>
+            <div className="flex items-end justify-between mt-2">
+              <span className={`text-xl font-black ${soatExpiringCount > 0 ? 'text-amber-600' : 'text-slate-700'}`}>
+                {soatExpiringCount}
+              </span>
+              <span className="text-[9px] text-slate-400 font-bold block">Por vencer</span>
+            </div>
+          </div>
+
+          {/* Indicator 3: Tecnomecánica */}
+          <div 
+            onClick={() => onNavigateTab('documents', { type: 'tech_preventive', compliance: 'EXPIRING_SOON' })}
+            className={`p-3.5 rounded-2xl border text-left cursor-pointer transition-all ${
+              techExpiringCount > 0 
+                ? 'bg-amber-50/40 border-amber-200/50 hover:bg-amber-50/70' 
+                : 'bg-slate-50/20 border-slate-100/80 hover:bg-slate-50/60'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Tecnomecánica</span>
+              {techExpiringCount > 0 && <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />}
+            </div>
+            <div className="flex items-end justify-between mt-2">
+              <span className={`text-xl font-black ${techExpiringCount > 0 ? 'text-amber-600' : 'text-slate-700'}`}>
+                {techExpiringCount}
+              </span>
+              <span className="text-[9px] text-slate-400 font-bold block">Por vencer</span>
+            </div>
+          </div>
+
+          {/* Indicator 4: Vencidos */}
+          <div 
+            onClick={() => onNavigateTab('documents', { compliance: 'VENCIDO' })}
+            className={`p-3.5 rounded-2xl border text-left cursor-pointer transition-all ${
+              expiredDocsCount > 0 
+                ? 'bg-rose-50/60 border-rose-200 hover:bg-rose-50/80' 
+                : 'bg-slate-50/20 border-slate-100/80 hover:bg-slate-50/60'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[9px] font-black text-rose-500 uppercase tracking-wider block">Docs Vencidos</span>
+              {expiredDocsCount > 0 && <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />}
+            </div>
+            <div className="flex items-end justify-between mt-2">
+              <span className={`text-xl font-black ${expiredDocsCount > 0 ? 'text-rose-600 font-extrabold' : 'text-slate-700'}`}>
+                {expiredDocsCount}
+              </span>
+              <span className="text-[9px] text-slate-405 font-bold block">Acción Crítica</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Detail Alerts Expansion banner */}
+        {expiredDocsCount > 0 && (
+          <div className="bg-rose-50 text-rose-750 border border-rose-105/40 p-4 rounded-2xl flex items-start gap-2.5 text-xs font-semibold leading-relaxed text-left">
+            <span className="text-sm shrink-0">⚠️</span>
+            <div>
+              <span className="font-extrabold text-rose-800">Decisión Administrativa Requerida:</span> Existen {expiredDocsCount} documentos caducados en circulación. No se han aplicado bloqueos ni suspensiones automáticas en esta versión preventiva; se recomienda auditar sus expedientes y aplicar restricciones manuales a sus respectivas cuentas.
+            </div>
+          </div>
+        )}
+      </section>
       
       {/* SECTION: FILA 1 – Primary Action & Ecosystem Health */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -174,7 +317,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         <div className="lg:col-span-2" id="block-prioridades">
           <div className="bg-white border border-slate-100 rounded-[28px] p-6 shadow-xs flex flex-col justify-between h-full space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-50 pb-3">
-              <div>
+              <div className="text-left">
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-0.5">Control de Cuellos de Botella</span>
                 <h3 className="text-lg font-black text-slate-850 tracking-tight flex items-center gap-2">
                   Prioridad Operativa
@@ -192,39 +335,60 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 </div>
               ) : (
                 top3PendingItems.map((item) => {
-                  const itemDate = item.date ? new Date(item.date).toLocaleDateString('es-ES', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  }) : 'Pendiente';
+                  const itemDate = item.type === 'expired_document'
+                    ? 'CADUCADO'
+                    : item.date ? new Date(item.date).toLocaleDateString('es-ES', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      }) : 'Pendiente';
 
                   return (
                     <div 
                       key={item.id} 
-                      className="bg-slate-50/50 hover:bg-slate-50/80 border border-slate-100/80 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-200"
+                      className={`border p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-200 ${
+                        item.type === 'expired_document'
+                          ? 'bg-rose-50/30 border-rose-100 hover:bg-rose-50/50'
+                          : 'bg-slate-50/50 hover:bg-slate-50/80 border-slate-100/80'
+                      }`}
                     >
                       <div className="space-y-1.5 min-w-0 flex-1 text-left">
                         <div className="flex items-center gap-2">
                           <span className={`px-2 py-0.5 text-[8.5px] font-extrabold uppercase tracking-wider rounded-md border ${
+                            item.type === 'expired_document' ? 'bg-rose-100 text-rose-700 border-rose-250 font-black animate-pulse' :
                             item.type === 'document' ? 'bg-indigo-50 text-indigo-600 border-indigo-100/50' :
                             item.type === 'report' ? 'bg-rose-50 text-rose-605 border-rose-100/50' :
                             'bg-amber-50 text-amber-655 border-amber-100/50'
                           }`}>
-                            {item.type === 'document' ? 'Documento' : item.type === 'report' ? 'Conflicto' : 'Vehículo'}
+                            {item.type === 'expired_document' ? 'VENCIDO 🚨' : item.type === 'document' ? 'Documento' : item.type === 'report' ? 'Conflicto' : 'Vehículo'}
                           </span>
-                          <span className="text-[9.5px] text-slate-400 font-bold">Subido: {itemDate}</span>
+                          <span className={`text-[9.5px] font-bold ${item.type === 'expired_document' ? 'text-rose-600' : 'text-slate-400'}`}>
+                            Estatus: {itemDate}
+                          </span>
                         </div>
                         
-                        <h5 className="font-extrabold text-slate-800 text-xs truncate leading-snug">{item.title}</h5>
-                        <p className="text-[10.5px] text-slate-500 font-medium leading-normal truncate">
+                        <h5 className={`font-extrabold text-xs truncate leading-snug ${item.type === 'expired_document' ? 'text-rose-900' : 'text-slate-800'}`}>{item.title}</h5>
+                        <p className={`text-[10.5px] font-medium leading-normal truncate ${item.type === 'expired_document' ? 'text-rose-700' : 'text-slate-505'}`}>
                           {item.subtitle}
                         </p>
                       </div>
 
                       <button
-                        onClick={() => onNavigateTab(item.tabTarget)}
-                        className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black shadow-xs flex items-center justify-center gap-1.5 cursor-pointer transition-colors shrink-0"
+                        onClick={() => {
+                          if (item.type === 'expired_document') {
+                            onNavigateTab('documents', { type: item.docType || 'all', compliance: 'VENCIDO' });
+                          } else if (item.type === 'document') {
+                            onNavigateTab('documents', { status: 'pending' });
+                          } else {
+                            onNavigateTab(item.tabTarget);
+                          }
+                        }}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-black shadow-xs flex items-center justify-center gap-1.5 cursor-pointer transition-colors shrink-0 ${
+                          item.type === 'expired_document'
+                            ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                            : 'bg-rose-600 hover:bg-rose-700 text-white'
+                        }`}
                       >
                         Aprobar <ArrowRight size={11} strokeWidth={2.5} />
                       </button>

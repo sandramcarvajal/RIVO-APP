@@ -1,6 +1,7 @@
 import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import { isAdminUser } from "../../../../shared/enums";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -26,8 +27,16 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
     return <Navigate to="/auth" state={{ from: location }} replace />;
   }
 
-  if (allowedRoles && user && !allowedRoles.includes(user.role)) {
-    return <Navigate to="/" replace />;
+  if (allowedRoles && user) {
+    const hasRole = allowedRoles.some(allowedRole => {
+      if (allowedRole === 'admin') {
+        return isAdminUser(user.role);
+      }
+      return user.role === allowedRole;
+    });
+    if (!hasRole) {
+      return <Navigate to="/" replace />;
+    }
   }
 
   return <>{children}</>;

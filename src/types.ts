@@ -86,6 +86,7 @@ export interface User {
   rating?: string | number | null;
   reviewCount?: number;
   vehicle?: Vehicle | null; // Keeps retrocompatibility
+  createdAt?: string | Date;
 }
 
 export interface Notification {
