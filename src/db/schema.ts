@@ -167,3 +167,17 @@ export const adminLogs = pgTable("admin_logs", {
   };
 });
 
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  token: text("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  isUsed: boolean("is_used").default(false).notNull(),
+}, (table) => {
+  return {
+    tokenIdx: index("password_reset_tokens_token_idx").on(table.token),
+  };
+});
+
+

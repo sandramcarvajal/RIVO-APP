@@ -1,8 +1,21 @@
+import * as dotenv from "dotenv";
+dotenv.config();
+
 import express from "express";
 import path from "path";
 import cookieParser from "cookie-parser";
 import { createServer as createViteServer } from "vite";
 import { fileURLToPath } from "url";
+
+// Print SMTP startup status logs
+console.log("=== SMTP STARTUP CHECK ===");
+console.log(`SMTP_HOST loaded: ${!!process.env.SMTP_HOST}`);
+console.log(`SMTP_USER loaded: ${!!process.env.SMTP_USER}`);
+console.log(`SMTP_PASS loaded: ${!!process.env.SMTP_PASS}`);
+console.log(`SMTP_FROM loaded: ${!!process.env.SMTP_FROM}`);
+const smtpIsConfiguredOnBoot = !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+console.log(`SMTP status: ${smtpIsConfiguredOnBoot ? "SMTP ENABLED" : "SMTP DISABLED"}`);
+console.log("==========================");
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,6 +34,7 @@ process.stderr.on("error", (err: any) => {
 
 async function startServer() {
   const app = express();
+  app.set("trust proxy", true);
   const PORT = 3000;
 
   app.use(express.json({ limit: "50mb" }));
@@ -57,6 +71,10 @@ async function startServer() {
   // Auth Module
   const { authRouter } = await import("./src/server/modules/auth/infrastructure/AuthRouter");
   app.use("/api/auth", authRouter);
+
+  // Profile Module
+  const { profileRouter } = await import("./src/server/modules/auth/infrastructure/ProfileRouter");
+  app.use("/api/profile", profileRouter);
 
   // Vehicles Module
   const { vehicleRouter } = await import("./src/server/modules/vehicles/infrastructure/VehicleRouter");

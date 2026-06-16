@@ -102,4 +102,35 @@ export class AuthService {
 
     return await response.json();
   }
+
+  static async forgotPassword(email: string): Promise<{ success: boolean; message: string; devLink?: string }> {
+    const response = await fetch("/api/auth/forgot-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Ocurrió un error al solicitar recuperación de contraseña");
+    }
+
+    return await response.json();
+  }
+
+  static async resetPassword(token: string, password?: string): Promise<{ success: boolean; message: string }> {
+    const response = await fetch("/api/auth/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, password }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Error al restablecer la contraseña");
+    }
+
+    return await response.json();
+  }
 }
+

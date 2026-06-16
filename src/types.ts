@@ -83,6 +83,7 @@ export interface User {
   email: string;
   role: UserRole;
   avatar?: string;
+  phone?: string;
   rating?: string | number | null;
   reviewCount?: number;
   vehicle?: Vehicle | null; // Keeps retrocompatibility
