@@ -12,23 +12,31 @@ flowchart LR
     Conductor["👤 Conductor Corporativo"]
 
     subgraph Sistema ["Sistema Rivo (Módulo de Conductores)"]
+        UC_Registro(["Registrarse en Rivo"])
+        UC_Login(["Iniciar Sesión"])
+        UC_ResetPass(["Recuperar contraseña"])
         UC_RegVehicle(["Registrar Vehículos"])
         UC_UploadDocs(["Cargar SOAT / Licencia / Tecno"])
         UC_CreateRoute(["Crear e Instanciar Ruta"])
         UC_ManageJoin(["Gestionar Solicitudes (Aceptar/Rechazar)"])
         UC_StartRoute(["Iniciar Trayecto de Viaje"])
-        UC_History(["Visualizar Historial de Ofrecidos"])
+        UC_Rating(["Visualizar Historial de pasajeros"])
+        UC_History(["Calificar pasajero"])
         UC_Profile(["Gestionar Perfil e Información"])
         
         UC_CheckPicoYPlaca(["Validación Cruce de Pico y Placa"])
-        UC_CheckStatus(["Verificación Vial Administrativa"])
+        UC_CheckStatus(["Validación Documental del Vehículo"])
     end
 
+    Conductor --> UC_Registro
+    Conductor --> UC_Login
+    Conductor --> UC_ResetPass
     Conductor --> UC_RegVehicle
     Conductor --> UC_UploadDocs
     Conductor --> UC_CreateRoute
     Conductor --> UC_ManageJoin
     Conductor --> UC_StartRoute
+    Conductor --> UC_Rating
     Conductor --> UC_History
     Conductor --> UC_Profile
 
