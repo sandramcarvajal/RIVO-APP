@@ -17,11 +17,11 @@ Este documento implementa la matriz de asignación de responsabilidades **RACI**
 
 | Actividad / Proceso Vial | Pasajero | Conductor | Administrador | Admin Master (Master) |
 | :--- | :---: | :---: | :---: | :---: |
-| **Registrar cuenta en la plataforma** | **R** | **R** | **C** | **A** |
+| **Registrar cuenta en la plataforma** | **R** | **R** | **CO** | **A** |
 | **Registrar vehículo en el garaje** | **I** | **R** | **A** | **I** |
 | **Cargar SOAT / Licencia** | **I** | **R** | **A** | **I** |
 | **Auditar y habilitar SOAT** | **I** | **I** | **R** | **A** |
-| **Definir y validar Pico y Placa** | **C** | **C** | **R** | **A** |
+| **Definir y validar Pico y Placa** | **CO** | **CO** | **R** | **A** |
 | **Crear y programar Ruta** | **I** | **R** | **A** | **I** |
 | **Solicitar unión a viaje (Reserva)** | **R** | **A** | **I** | **I** |
 | **Veredicto de unión a viaje** | **I** | **R** | **A** | **I** |
@@ -30,7 +30,7 @@ Este documento implementa la matriz de asignación de responsabilidades **RACI**
 | **Calificar al Conductor** | **R** | **I** | **A** | **I** |
 | **Moderar incidentes o denuncias** | **I** | **I** | **R** | **A** |
 | **Suspender / Reactivar cuentas de usuario** | **I** | **I** | **R** | **A** |
-| **Asignar / Promover Roles Admin** | **I** | **I** | **C** | **A** |
+| **Asignar / Promover Roles Admin** | **I** | **I** | **CO** | **A** |
 | **Exportar Informes de Alta Dirección** | **I** | **I** | **R** | **A** |
 
 ---
