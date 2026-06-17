@@ -8,35 +8,33 @@ Este documento examina las acciones facultadas para los roles administrativos en
 ## 🎭 1. Casos de Uso Administrativos en Rivo
 
 ```mermaid
-fcg [Casos de Uso - Administrador]
-left to right direction
+flowchart LR
+    Admin["👤 Administrador Estándar"]
+    Master["👑 Administrador Master"]
 
-actor Admin as "Administrador Estándar"
-actor Master as "Administrador Master"
+    subgraph Sistema ["Sistema Rivo (Módulo de Administración)"]
+        UC_CreateUser(["Alta Directa de Usuarios"])
+        UC_EditUser(["Editar Datos de Colaboradores"])
+        UC_SuspUser(["Suspender / Reactivar Cuentas"])
+        UC_VerifyVeh(["Aprobar / Rechazar Vehículos"])
+        UC_AuditDocs(["Auditoría de SOAT y Licencias"])
+        UC_Moderate(["Moderar Denuncias e Incidentes"])
+        UC_Analytics(["Monitorear Analítica Metropolitana"])
+        UC_Reports(["Exportar Reportes Ejecutivos (PDF/Excel)"])
+        UC_RoleElevation(["Elevación y Asignación de Roles"])
+    end
 
-rectangle "Sistema Rivo (Módulo de Administración)" {
-    usecase UC_CreateUser as "Alta Directa de Usuarios"
-    usecase UC_EditUser as "Editar Datos de Colaboradores"
-    usecase UC_SuspUser as "Suspender / Reactivar Cuentas"
-    usecase UC_VerifyVeh as "Aprobar / Rechazar Vehículos"
-    usecase UC_AuditDocs as "Auditoría de SOAT y Licencias"
-    usecase UC_Moderate as "Moderar Denuncias e Incidentes"
-    usecase UC_Analytics as "Monitorear Analítica Metropolitana"
-    usecase UC_Reports as "Exportar Reportes Ejecutivos (PDF/Excel)"
-    usecase UC_RoleElevation as "Elevación y Asignación de Roles"
-}
+    Admin --> UC_CreateUser
+    Admin --> UC_EditUser
+    Admin --> UC_SuspUser
+    Admin --> UC_VerifyVeh
+    Admin --> UC_AuditDocs
+    Admin --> UC_Moderate
+    Admin --> UC_Analytics
+    Admin --> UC_Reports
 
-Admin --> UC_CreateUser
-Admin --> UC_EditUser
-Admin --> UC_SuspUser
-Admin --> UC_VerifyVeh
-Admin --> UC_AuditDocs
-Admin --> UC_Moderate
-Admin --> UC_Analytics
-Admin --> UC_Reports
-
-Master --|> Admin
-Master --> UC_RoleElevation
+    Master --> Admin
+    Master --> UC_RoleElevation
 ```
 
 ---

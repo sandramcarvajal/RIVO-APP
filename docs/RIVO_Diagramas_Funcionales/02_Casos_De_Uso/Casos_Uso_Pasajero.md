@@ -8,36 +8,34 @@ Este documento especifica de forma formal y visual los límites y acciones que p
 ## 🎭 1. Casos de Uso de Pasajero en Rivo
 
 ```mermaid
-fcg [Casos de Uso - Pasajero]
-left to right direction
-
-actor Pasajero as "Pasajero Corporativo"
-
-rectangle "Sistema Rivo (Módulo de Pasajeros)" {
-    usecase UC_Registro as "Registrarse en Rivo"
-    usecase UC_Login as "Iniciar Sesión"
-    usecase UC_ResetPass as "Recuperar Contraseña"
-    usecase UC_Explore as "Buscar Rutas Viales (Mapa)"
-    usecase UC_Join as "Solicitar Unirse a Ruta (Reserva)"
-    usecase UC_CancelRequest as "Cancelar Petición de Viaje"
-    usecase UC_History as "Visualizar Historial de Viajes"
-    usecase UC_Rating as "Calificar y Opinión de Conductor"
-    usecase UC_Profile as "Gestionar Perfil de Usuario"
+flowchart LR
+    Pasajero["👤 Pasajero Corporativo"]
     
-    usecase UC_PicoYPlaca as "Validación Automática Pico y Placa"
-}
+    subgraph Sistema ["Sistema Rivo (Módulo de Pasajeros)"]
+        UC_Registro(["Registrarse en Rivo"])
+        UC_Login(["Iniciar Sesión"])
+        UC_ResetPass(["Recuperar Contraseña"])
+        UC_Explore(["Buscar Rutas Viales (Mapa)"])
+        UC_Join(["Solicitar Unirse a Ruta (Reserva)"])
+        UC_CancelRequest(["Cancelar Petición de Viaje"])
+        UC_History(["Visualizar Historial de Viajes"])
+        UC_Rating(["Calificar y Opinión de Conductor"])
+        UC_Profile(["Gestionar Perfil de Usuario"])
+        
+        UC_PicoYPlaca(["Validación Automática Pico y Placa"])
+    end
+    
+    Pasajero --> UC_Registro
+    Pasajero --> UC_Login
+    Pasajero --> UC_ResetPass
+    Pasajero --> UC_Explore
+    Pasajero --> UC_Join
+    Pasajero --> UC_CancelRequest
+    Pasajero --> UC_History
+    Pasajero --> UC_Rating
+    Pasajero --> UC_Profile
 
-Pasajero --> UC_Registro
-Pasajero --> UC_Login
-Pasajero --> UC_ResetPass
-Pasajero --> UC_Explore
-Pasajero --> UC_Join
-Pasajero --> UC_CancelRequest
-Pasajero --> UC_History
-Pasajero --> UC_Rating
-Pasajero --> UC_Profile
-
-UC_Explore ..> UC_PicoYPlaca : <<include>>
+    UC_Explore -.->|include| UC_PicoYPlaca
 ```
 
 ---

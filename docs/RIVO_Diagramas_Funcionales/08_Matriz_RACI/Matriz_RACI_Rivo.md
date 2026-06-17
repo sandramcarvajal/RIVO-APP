@@ -18,19 +18,19 @@ Este documento implementa la matriz de asignación de responsabilidades **RACI**
 | Actividad / Proceso Vial | Pasajero | Conductor | Administrador | Admin Master (Master) |
 | :--- | :---: | :---: | :---: | :---: |
 | **Registrar cuenta en la plataforma** | **R** | **R** | **C** | **A** |
-| **Registrar vehículo en el garaje** | **I** | **R** | **A** | **A** |
-| **Cargar SOAT / Licencia** | **I** | **R** | **A** | **A** |
+| **Registrar vehículo en el garaje** | **I** | **R** | **A** | **I** |
+| **Cargar SOAT / Licencia** | **I** | **R** | **A** | **I** |
 | **Auditar y habilitar SOAT** | **I** | **I** | **R** | **A** |
 | **Definir y validar Pico y Placa** | **C** | **C** | **R** | **A** |
-| **Crear y programar Ruta** | **I** | **R** | **A** | **A** |
-| **Solicitar unión a viaje (Reserva)** | **R** | **I** | **I** | **I** |
-| **Veredicto de unión a viaje** | **I** | **R** | **I** | **I** |
-| **Partida e Iniciar Viaje** | **I** | **R** | **I** | **I** |
-| **Auto-Finalizar Viaje (JIT)** | **I** | **I** | **A** | **A** |
-| **Calificar al Conductor** | **R** | **I** | **I** | **I** |
+| **Crear y programar Ruta** | **I** | **R** | **A** | **I** |
+| **Solicitar unión a viaje (Reserva)** | **R** | **A** | **I** | **I** |
+| **Veredicto de unión a viaje** | **I** | **R** | **A** | **I** |
+| **Partida e Iniciar Viaje** | **I** | **A** | **I** | **I** |
+| **Auto-Finalizar Viaje (JIT)** | **I** | **I** | **R** | **A** |
+| **Calificar al Conductor** | **R** | **I** | **A** | **I** |
 | **Moderar incidentes o denuncias** | **I** | **I** | **R** | **A** |
 | **Suspender / Reactivar cuentas de usuario** | **I** | **I** | **R** | **A** |
-| **Asignar / Promover Roles Admin** | **I** | **I** | **I** | **R / A** |
+| **Asignar / Promover Roles Admin** | **I** | **I** | **C** | **A** |
 | **Exportar Informes de Alta Dirección** | **I** | **I** | **R** | **A** |
 
 ---

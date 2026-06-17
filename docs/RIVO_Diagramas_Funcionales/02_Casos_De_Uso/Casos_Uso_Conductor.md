@@ -8,34 +8,32 @@ Este documento detalla de manera estructurada los casos de uso específicos del 
 ## 🎭 1. Casos de Uso de Conductor en Rivo
 
 ```mermaid
-fcg [Casos de Uso - Conductor]
-left to right direction
+flowchart LR
+    Conductor["👤 Conductor Corporativo"]
 
-actor Conductor as "Conductor Corporativo"
+    subgraph Sistema ["Sistema Rivo (Módulo de Conductores)"]
+        UC_RegVehicle(["Registrar Vehículos"])
+        UC_UploadDocs(["Cargar SOAT / Licencia / Tecno"])
+        UC_CreateRoute(["Crear e Instanciar Ruta"])
+        UC_ManageJoin(["Gestionar Solicitudes (Aceptar/Rechazar)"])
+        UC_StartRoute(["Iniciar Trayecto de Viaje"])
+        UC_History(["Visualizar Historial de Ofrecidos"])
+        UC_Profile(["Gestionar Perfil e Información"])
+        
+        UC_CheckPicoYPlaca(["Validación Cruce de Pico y Placa"])
+        UC_CheckStatus(["Verificación Vial Administrativa"])
+    end
 
-rectangle "Sistema Rivo (Módulo de Conductores)" {
-    usecase UC_RegVehicle as "Registrar Vehículos"
-    usecase UC_UploadDocs as "Cargar SOAT / Licencia / Tecno"
-    usecase UC_CreateRoute as "Crear e Instanciar Ruta"
-    usecase UC_ManageJoin as "Gestionar Solicitudes (Aceptar/Rechazar)"
-    usecase UC_StartRoute as "Iniciar Trayecto de Viaje"
-    usecase UC_History as "Visualizar Historial de Ofrecidos"
-    usecase UC_Profile as "Gestionar Perfil e Información"
-    
-    usecase UC_CheckPicoYPlaca as "Validación Cruce de Pico y Placa"
-    usecase UC_CheckStatus as "Verificación Vial Administrativa"
-}
+    Conductor --> UC_RegVehicle
+    Conductor --> UC_UploadDocs
+    Conductor --> UC_CreateRoute
+    Conductor --> UC_ManageJoin
+    Conductor --> UC_StartRoute
+    Conductor --> UC_History
+    Conductor --> UC_Profile
 
-Conductor --> UC_RegVehicle
-Conductor --> UC_UploadDocs
-Conductor --> UC_CreateRoute
-Conductor --> UC_ManageJoin
-Conductor --> UC_StartRoute
-Conductor --> UC_History
-Conductor --> UC_Profile
-
-UC_CreateRoute ..> UC_CheckPicoYPlaca : <<include>>
-UC_CreateRoute ..> UC_CheckStatus : <<include>>
+    UC_CreateRoute -.->|include| UC_CheckPicoYPlaca
+    UC_CreateRoute -.->|include| UC_CheckStatus
 ```
 
 ---
